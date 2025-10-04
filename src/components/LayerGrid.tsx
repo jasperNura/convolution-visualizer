@@ -33,6 +33,13 @@ const getHue = (hexColor: string): number => {
   return colorMap[hexColor] || 200; // Default to blue-ish
 };
 
+const isPaddingNode = (node: Node, layerSize: { x: number; y: number }): boolean => {
+  return (
+    node.x < 0 || node.x >= layerSize.x ||
+    node.y < 0 || node.y >= layerSize.y
+  );
+};
+
 const LayerGrid: React.FC<LayerGridProps> = ({ 
   data, 
   position, 
@@ -128,6 +135,34 @@ const LayerGrid: React.FC<LayerGridProps> = ({
     });
   }, [data, position, color, layerIndex, highlightedNodes, selectedNode, onNodeClick, size, useLayerData]);
 
+  const padding = useMemo(() => {
+    const paddedNodes: Node[] = highlightedNodes.getAll().filter(n => isPaddingNode(n, size));
+    return paddedNodes.map((node, index) => {
+      const height = 0.6;
+      const posX = node.x - size.x / 2 + 0.5;
+      const posY = node.y - size.y / 2 + 0.5;
+
+      return (
+          <mesh key={`padding-${index}`} 
+            position={[
+              position.x + posX,
+              position.y + posY,
+              position.z + height / 2
+            ]}
+            castShadow
+            receiveShadow
+          >
+            <boxGeometry args={[0.8, 0.8, height]} />
+            <meshLambertMaterial 
+              color='#ffffff'
+              transparent
+              opacity={0.3}
+            />
+          </mesh>
+      );
+    });
+  }, [position, highlightedNodes, size]);
+
   // Create base platform for the layer
   const platform = useMemo(() => (
     <mesh 
@@ -147,6 +182,7 @@ const LayerGrid: React.FC<LayerGridProps> = ({
     <group>
       {platform}
       {cubes}
+      {padding}
       <Text
         position={[position.x, position.y - size.y/2 - 1.5, position.z + 1]}
         fontSize={0.5}

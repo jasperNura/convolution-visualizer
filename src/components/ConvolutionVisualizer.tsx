@@ -98,7 +98,7 @@ const calculateSingleNodeReceptiveField = (
   inputSize: { x: number; y: number }
 ): Node[] => {
   const receptiveField: Node[] = [];
-  
+
   // For each position in the kernel
   for (let kx = 0; kx < kernelSize.x; kx++) {
     for (let ky = 0; ky < kernelSize.y; ky++) {
@@ -108,9 +108,9 @@ const calculateSingleNodeReceptiveField = (
       const inputY = nodeY * stride.y + ky * dilation.y - padding.y;
       
       // Check bounds
-      if (inputX >= 0 && inputX < inputSize.x && inputY >= 0 && inputY < inputSize.y) {
+      // if (inputX >= 0 && inputX < inputSize.x && inputY >= 0 && inputY < inputSize.y) {
         receptiveField.push({ x: inputX, y: inputY });
-      }
+      // }
     }
   }
   
@@ -206,7 +206,8 @@ const ConvolutionVisualizer: React.FC = () => {
 
   // State for visualization settings
   const [useLayerData, setUseLayerData] = useState(true);
-  const [temporalConvolutionMode, setTemporalConvolutionMode] = useState(false);
+  const [temporalConvolutionMode, setTemporalConvolutionMode] = useState(true);
+  const [reverseOrder, setReverseOrder] = useState(true);
 
   // Calculate receptive field for a given node
   const calculateReceptiveField = useCallback((state: ReceptiveFieldState): NodeCounter[] => {
@@ -229,6 +230,7 @@ const ConvolutionVisualizer: React.FC = () => {
       // Get the layer configuration for the previous layer and current layer
       const prevLayer = layerConfigs[currentLayer - 1];
       const currentLayerConfig = layerConfigs[currentLayer];
+      const currSize = currentLayerConfig.size;
       
       if (!currentLayerConfig.convolution) {
         currentLayer--;
@@ -239,12 +241,17 @@ const ConvolutionVisualizer: React.FC = () => {
       
       // For each node in the current layer, calculate its receptive field in the previous layer
       for (const [node, _] of currentNodes) {
+        if (node.x < 0 || node.x >= currSize.x || node.y < 0 || node.y >= currSize.y) {
+          // If the node is out of bounds, move on (this can happen with padding)
+          continue;
+        }
         // Calculate the receptive field for this node
         const receptiveFieldNodes = calculateSingleNodeReceptiveField(
           node.x, node.y,
           conv.kernelSize, conv.stride, conv.dilation, conv.padding,
           prevLayer.size
         );
+        console.log(node, receptiveFieldNodes, prevLayer.size);
         
         // Add all receptive field nodes to the next layer's highlights
         nextNodes.addAll(receptiveFieldNodes);
@@ -301,16 +308,17 @@ const ConvolutionVisualizer: React.FC = () => {
 
   // Calculate layer position based on temporal convolution mode
   const calculateLayerPosition = useCallback((config: LayerConfig, index: number): Vector3 => {
+    const zIndex = reverseOrder ? 6 * (2 + index - layerConfigs.length) : 6 * (1 - index);
     if (temporalConvolutionMode) {
       // In temporal mode, align the bottom row of all layers
       const maxSizeY = layerConfigs[0].size.y;
       const yOffset = (maxSizeY - config.size.y) / 2;
-      return new Vector3(0, -yOffset, 6 * (1 - index));
+      return new Vector3(0, -yOffset, zIndex);
     } else {
       // Normal mode - center all layers
-      return new Vector3(0, 0, 6 * (1 - index));
+      return new Vector3(0, 0, zIndex);
     }
-  }, [temporalConvolutionMode, layerConfigs]);
+  }, [temporalConvolutionMode, reverseOrder, layerConfigs]);
 
   // Generate layer data for rendering
   const layerData = useMemo(() => {
@@ -327,6 +335,8 @@ const ConvolutionVisualizer: React.FC = () => {
         onUseLayerDataChange={setUseLayerData}
         temporalConvolutionMode={temporalConvolutionMode}
         onTemporalConvolutionModeChange={setTemporalConvolutionMode}
+        reverseOrder={reverseOrder}
+        onReverseOrderChange={setReverseOrder}
       />
       
       {/* 3D Canvas */}

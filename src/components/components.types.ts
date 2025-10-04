@@ -40,6 +40,10 @@ export class NodeCounter implements Iterable<[Node, number]> {
         nodes.forEach(node => this.add(node));
     }
 
+    getAll(): Node[] {
+        return Array.from(this.nodeCache.values());
+    }
+
     getCount(node: Node): number {
         const key = this.getNodeKey(node);
         return this.counts.get(key) || 0;

@@ -58,6 +58,8 @@ interface ConfigurationPanelProps {
   onUseLayerDataChange: (useLayerData: boolean) => void;
   temporalConvolutionMode: boolean;
   onTemporalConvolutionModeChange: (temporalMode: boolean) => void;
+  reverseOrder: boolean;
+  onReverseOrderChange: (reverseOrder: boolean) => void;
 }
 
 const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({
@@ -66,7 +68,9 @@ const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({
   useLayerData,
   onUseLayerDataChange,
   temporalConvolutionMode,
-  onTemporalConvolutionModeChange
+  onTemporalConvolutionModeChange,
+  reverseOrder,
+  onReverseOrderChange
 }) => {
   const handleConvolutionChange = (
     layerIndex: number,
@@ -171,6 +175,26 @@ const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({
             />
             <span>Temporal Convolution Mode</span>
           </label>
+
+          <label style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            fontSize: '12px',
+            cursor: 'pointer'
+          }}>
+            <input
+              type="checkbox"
+              checked={reverseOrder}
+              onChange={(e) => onReverseOrderChange(e.target.checked)}
+              style={{
+                width: '16px',
+                height: '16px',
+                accentColor: '#2196F3'
+              }}
+            />
+            <span>Reverse Order</span>
+          </label>
         </div>
         
         <div style={{ 
@@ -184,6 +208,9 @@ const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({
           </div>
           <div>
             <strong>Temporal Mode:</strong> Aligns bottom row of all convolution layers for temporal analysis.
+          </div>
+          <div>
+            <strong>Reverse order:</strong> Show last layer first.
           </div>
         </div>
       </div>
