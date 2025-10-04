@@ -9,12 +9,21 @@ interface LayerData {
   activated: boolean;
 }
 
+interface HighlightedNode {
+  x: number;
+  y: number;
+}
+
 interface LayerGridProps {
   data: LayerData[];
   position: Vector3;
   color: string;
   size: number;
   name: string;
+  layerIndex: number;
+  onNodeClick: (layerIndex: number, nodeX: number, nodeY: number) => void;
+  highlightedNodes: HighlightedNode[];
+  selectedNode: HighlightedNode | null;
 }
 
 // Helper function to get hue from hex color
@@ -32,7 +41,11 @@ const LayerGrid: React.FC<LayerGridProps> = ({
   position, 
   color, 
   size, 
-  name 
+  name,
+  layerIndex,
+  onNodeClick,
+  highlightedNodes,
+  selectedNode
 }) => {
   // Create cubes for each neuron/activation
   const cubes = useMemo(() => {
@@ -40,7 +53,28 @@ const LayerGrid: React.FC<LayerGridProps> = ({
       const intensity = 0.3 + (item.value * 0.7);
       const height = item.activated ? 0.8 : 0.3;
       
-      const adjustedColor = `hsl(${getHue(color)}, 70%, ${20 + intensity * 50}%)`;
+      // Calculate node coordinates in grid space
+      const nodeX = Math.round(item.x + size / 2 - 0.5);
+      const nodeY = Math.round(item.y + size / 2 - 0.5);
+      
+      // Check if this node is highlighted
+      const isHighlighted = highlightedNodes.some(h => 
+        h.x === nodeX && h.y === nodeY
+      );
+      
+      // Check if this is the selected node
+      const isSelected = selectedNode?.x === nodeX && 
+                        selectedNode?.y === nodeY;
+      
+      // Determine color based on state
+      let cubeColor: string;
+      if (isSelected) {
+        cubeColor = '#FFD700'; // Gold for selected
+      } else if (isHighlighted) {
+        cubeColor = '#FF6B6B'; // Red for highlighted receptive field
+      } else {
+        cubeColor = `hsl(${getHue(color)}, 70%, ${20 + intensity * 50}%)`;
+      }
       
       return (
         <mesh 
@@ -52,15 +86,29 @@ const LayerGrid: React.FC<LayerGridProps> = ({
           ]}
           castShadow
           receiveShadow
+          onClick={(e) => {
+            e.stopPropagation();
+            onNodeClick(layerIndex, nodeX, nodeY);
+          }}
+          onPointerOver={(e) => {
+            e.stopPropagation();
+            document.body.style.cursor = 'pointer';
+          }}
+          onPointerOut={(e) => {
+            e.stopPropagation();
+            document.body.style.cursor = 'default';
+          }}
         >
           <boxGeometry args={[0.8, 0.8, height]} />
           <meshLambertMaterial 
-            color={adjustedColor}
+            color={cubeColor}
+            emissive={isSelected ? '#222200' : isHighlighted ? '#220000' : '#000000'}
+            emissiveIntensity={isSelected || isHighlighted ? 0.3 : 0}
           />
         </mesh>
       );
     });
-  }, [data, position, color]);
+  }, [data, position, color, layerIndex, highlightedNodes, selectedNode, onNodeClick, size]);
 
   // Create base platform for the layer
   const platform = useMemo(() => (
