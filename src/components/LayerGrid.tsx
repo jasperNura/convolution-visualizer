@@ -18,7 +18,7 @@ interface LayerGridProps {
   data: LayerData[];
   position: Vector3;
   color: string;
-  size: number;
+  size: { x: number; y: number };
   name: string;
   layerIndex: number;
   onNodeClick: (layerIndex: number, nodeX: number, nodeY: number) => void;
@@ -54,8 +54,8 @@ const LayerGrid: React.FC<LayerGridProps> = ({
       const height = item.activated ? 0.8 : 0.3;
       
       // Calculate node coordinates in grid space
-      const nodeX = Math.round(item.x + size / 2 - 0.5);
-      const nodeY = Math.round(item.y + size / 2 - 0.5);
+      const nodeX = Math.round(item.x + size.x / 2 - 0.5);
+      const nodeY = Math.round(item.y + size.y / 2 - 0.5);
       
       // Check if this node is highlighted
       const isHighlighted = highlightedNodes.some(h => 
@@ -116,7 +116,7 @@ const LayerGrid: React.FC<LayerGridProps> = ({
       position={[position.x, position.y, position.z - 0.1]}
       receiveShadow
     >
-      <boxGeometry args={[size + 1, size + 1, 0.1]} />
+      <boxGeometry args={[size.x + 1, size.y + 1, 0.1]} />
       <meshLambertMaterial 
         color="#333333" 
         opacity={0.7} 
@@ -130,7 +130,7 @@ const LayerGrid: React.FC<LayerGridProps> = ({
       {platform}
       {cubes}
       <Text
-        position={[position.x, position.y - size/2 - 1.5, position.z + 1]}
+        position={[position.x, position.y - size.y/2 - 1.5, position.z + 1]}
         fontSize={0.5}
         color="white"
         anchorX="center"
@@ -139,13 +139,13 @@ const LayerGrid: React.FC<LayerGridProps> = ({
         {name}
       </Text>
       <Text
-        position={[position.x, position.y - size/2 - 2, position.z + 1]}
+        position={[position.x, position.y - size.y/2 - 2, position.z + 1]}
         fontSize={0.3}
         color="#cccccc"
         anchorX="center"
         anchorY="middle"
       >
-        {size}×{size}
+        {size.x}×{size.y}
       </Text>
     </group>
   );
