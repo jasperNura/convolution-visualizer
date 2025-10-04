@@ -1,17 +1,13 @@
 import React, { useMemo } from 'react';
 import { Vector3 } from 'three';
 import { Text } from '@react-three/drei';
+import type { Node, NodeCounter } from './components.types';
 
 interface LayerData {
   x: number;
   y: number;
   value: number;
   activated: boolean;
-}
-
-interface HighlightedNode {
-  x: number;
-  y: number;
 }
 
 interface LayerGridProps {
@@ -22,8 +18,8 @@ interface LayerGridProps {
   name: string;
   layerIndex: number;
   onNodeClick: (layerIndex: number, nodeX: number, nodeY: number) => void;
-  highlightedNodes: HighlightedNode[];
-  selectedNode: HighlightedNode | null;
+  highlightedNodes: NodeCounter;
+  selectedNode: Node | null;
 }
 
 // Helper function to get hue from hex color
@@ -49,6 +45,7 @@ const LayerGrid: React.FC<LayerGridProps> = ({
 }) => {
   // Create cubes for each neuron/activation
   const cubes = useMemo(() => {
+    const maxHighlightCount = highlightedNodes.getMaxCount();
     return data.map((item, index) => {
       const intensity = 0.3 + (item.value * 0.7);
       const height = item.activated ? 0.8 : 0.3;
@@ -56,11 +53,10 @@ const LayerGrid: React.FC<LayerGridProps> = ({
       // Calculate node coordinates in grid space
       const nodeX = Math.round(item.x + size.x / 2 - 0.5);
       const nodeY = Math.round(item.y + size.y / 2 - 0.5);
-      
+
       // Check if this node is highlighted
-      const isHighlighted = highlightedNodes.some(h => 
-        h.x === nodeX && h.y === nodeY
-      );
+      const count = highlightedNodes.getCount({ x: nodeX, y: nodeY });
+      const isHighlighted = count > 0;
       
       // Check if this is the selected node
       const isSelected = selectedNode?.x === nodeX && 
@@ -71,7 +67,7 @@ const LayerGrid: React.FC<LayerGridProps> = ({
       if (isSelected) {
         cubeColor = '#FFD700'; // Gold for selected
       } else if (isHighlighted) {
-        cubeColor = '#FF6B6B'; // Red for highlighted receptive field
+        cubeColor = `hsl(0, ${count / maxHighlightCount * 100}%, 50%)`;
       } else {
         cubeColor = `hsl(${getHue(color)}, 70%, ${20 + intensity * 50}%)`;
       }
@@ -104,6 +100,8 @@ const LayerGrid: React.FC<LayerGridProps> = ({
             color={cubeColor}
             emissive={isSelected ? '#222200' : isHighlighted ? '#220000' : '#000000'}
             emissiveIntensity={isSelected || isHighlighted ? 0.3 : 0}
+            // transparent
+            // opacity={isHighlighted ? 1 : 0.6}
           />
         </mesh>
       );

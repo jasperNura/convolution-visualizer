@@ -4,16 +4,11 @@ import { OrbitControls } from '@react-three/drei';
 import { Vector3 } from 'three';
 import LayerGrid from './LayerGrid';
 import ConfigurationPanel from './ConfigurationPanel';
-import type { LayerConfigTemplate, LayerConfig } from './components.types';
-
-// Types for receptive field highlighting
-interface HighlightedNode {
-  x: number;
-  y: number;
-}
+import type { LayerConfigTemplate, LayerConfig, Node } from './components.types';
+import { NodeCounter } from './components.types';
 
 interface ReceptiveFieldState {
-  selectedNode: HighlightedNode | null;
+  selectedNode: Node | null;
   selectedLayer: number | null;
 }
 
@@ -101,8 +96,8 @@ const calculateSingleNodeReceptiveField = (
   dilation: { x: number; y: number },
   padding: { x: number; y: number },
   inputSize: { x: number; y: number }
-): HighlightedNode[] => {
-  const receptiveField: HighlightedNode[] = [];
+): Node[] => {
+  const receptiveField: Node[] = [];
   
   // For each position in the kernel
   for (let kx = 0; kx < kernelSize.x; kx++) {
@@ -123,8 +118,8 @@ const calculateSingleNodeReceptiveField = (
 };
 
 // Helper function to remove duplicate nodes
-const removeDuplicateNodes = (nodes: HighlightedNode[]): HighlightedNode[] => {
-  const unique: HighlightedNode[] = [];
+const removeDuplicateNodes = (nodes: Node[]): Node[] => {
+  const unique: Node[] = [];
   
   for (const node of nodes) {
     const exists = unique.find(u => u.x === node.x && u.y === node.y);
@@ -221,22 +216,23 @@ const ConvolutionVisualizer: React.FC = () => {
   });
 
   // Calculate receptive field for a given node
-  const calculateReceptiveField = useCallback((state: ReceptiveFieldState): HighlightedNode[][] => {
-    const highlightedByLayer: HighlightedNode[][] = layerConfigs.map(() => []); // Create empty arrays for each layer
+  const calculateReceptiveField = useCallback((state: ReceptiveFieldState): NodeCounter[] => {
+    const highlightedByLayer: NodeCounter[] = layerConfigs.map(() => new NodeCounter()); // Create empty maps for each layer
     if (state.selectedNode  == null || state.selectedLayer == null) {
       return highlightedByLayer;
     }
     // Start from the clicked layer and work backwards to input layer
     let currentLayer = state.selectedLayer;
-    let currentNodes: HighlightedNode[] = [{ x: state.selectedNode.x, y: state.selectedNode.y }];
-    
+    let currentNodes: NodeCounter = highlightedByLayer[currentLayer];
+    currentNodes.add({ x: state.selectedNode.x, y: state.selectedNode.y });
+
     // Add the clicked node to its layer
-    highlightedByLayer[currentLayer] = [...currentNodes];
-    
+    highlightedByLayer[currentLayer] = currentNodes;
+
     // Work backwards through layers
     while (currentLayer > 0) {
-      const nextNodes: HighlightedNode[] = [];
-      
+      const nextNodes: NodeCounter = highlightedByLayer[currentLayer - 1];
+
       // Get the layer configuration for the previous layer and current layer
       const prevLayer = layerConfigs[currentLayer - 1];
       const currentLayerConfig = layerConfigs[currentLayer];
@@ -249,7 +245,7 @@ const ConvolutionVisualizer: React.FC = () => {
       const conv = currentLayerConfig.convolution;
       
       // For each node in the current layer, calculate its receptive field in the previous layer
-      for (const node of currentNodes) {
+      for (const [node, _] of currentNodes) {
         // Calculate the receptive field for this node
         const receptiveFieldNodes = calculateSingleNodeReceptiveField(
           node.x, node.y,
@@ -258,18 +254,14 @@ const ConvolutionVisualizer: React.FC = () => {
         );
         
         // Add all receptive field nodes to the next layer's highlights
-        nextNodes.push(...receptiveFieldNodes);
+        nextNodes.addAll(receptiveFieldNodes);
       }
-      
-      // Remove duplicates and store
-      const uniqueNodes = removeDuplicateNodes(nextNodes);
-      highlightedByLayer[currentLayer - 1] = uniqueNodes;
-      
+
       // Move to the previous layer
-      currentNodes = uniqueNodes;
+      currentNodes = nextNodes;
       currentLayer--;
     }
-    
+
     return highlightedByLayer;
   }, [layerConfigs]);
 
@@ -359,7 +351,7 @@ const ConvolutionVisualizer: React.FC = () => {
               name={config.name}
               layerIndex={index}
               onNodeClick={handleNodeClick}
-              highlightedNodes={highlightedNodesByLayer[index] || []}
+              highlightedNodes={highlightedNodesByLayer[index] || new Map()}
               selectedNode={receptiveFieldState.selectedLayer === index ? receptiveFieldState.selectedNode : null}
             />
           ))}
