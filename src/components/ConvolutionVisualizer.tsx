@@ -13,12 +13,12 @@ interface ReceptiveFieldState {
 }
 
 // Utility function to calculate output size given input size and convolution parameters
-const calculateOutputSize = (inputSize: number, kernelSize: number, stride: number, padding: number, dilation: number): number => {
-  return Math.floor((inputSize + 2 * padding - dilation * (kernelSize - 1) - 1) / stride + 1);
+const calculateOutputSize = (inputSize: number, kernelSize: number, stride: number, padding: number, dilation: number, singleSidedPadding: boolean): number => {
+  return Math.floor((inputSize + (singleSidedPadding ? padding : 2 * padding) - dilation * (kernelSize - 1) - 1) / stride + 1);
 };
 
 // Function to calculate layer sizes based on convolution parameters
-const calculateLayerSizes = (configs: LayerConfigTemplate[]): LayerConfig[] => {
+const calculateLayerSizes = (configs: LayerConfigTemplate[], temporalMode: boolean = false): LayerConfig[] => {
   const result: LayerConfig[] = [];
   
   for (let i = 0; i < configs.length; i++) {
@@ -34,8 +34,8 @@ const calculateLayerSizes = (configs: LayerConfigTemplate[]): LayerConfig[] => {
       const conv = config.convolution!;
       
       size = {
-        x: calculateOutputSize(prevSize.x, conv.kernelSize.x, conv.stride.x, conv.padding.x, conv.dilation.x),
-        y: calculateOutputSize(prevSize.y, conv.kernelSize.y, conv.stride.y, conv.padding.y, conv.dilation.y)
+        x: calculateOutputSize(prevSize.x, conv.kernelSize.x, conv.stride.x, conv.padding.x, conv.dilation.x, false),
+        y: calculateOutputSize(prevSize.y, conv.kernelSize.y, conv.stride.y, conv.padding.y, conv.dilation.y, temporalMode)
       };
     }
     
@@ -95,7 +95,8 @@ const calculateSingleNodeReceptiveField = (
   stride: { x: number; y: number },
   dilation: { x: number; y: number },
   padding: { x: number; y: number },
-  inputSize: { x: number; y: number }
+  inputSize: { x: number; y: number },
+  temporalMode: boolean = false
 ): Node[] => {
   const receptiveField: Node[] = [];
 
@@ -103,9 +104,13 @@ const calculateSingleNodeReceptiveField = (
   for (let kx = 0; kx < kernelSize.x; kx++) {
     for (let ky = 0; ky < kernelSize.y; ky++) {
       // Calculate the actual input position considering stride, dilation, and padding
-      // Formula: input_pos = output_pos * stride + kernel_pos * dilation - padding
       const inputX = nodeX * stride.x + kx * dilation.x - padding.x;
-      const inputY = nodeY * stride.y + ky * dilation.y - padding.y;
+      
+      // For temporal mode (causal), padding is only added at the beginning (y=0)
+      // so we don't subtract padding from the Y calculation
+      const inputY = temporalMode 
+        ? nodeY * stride.y + ky * dilation.y
+        : nodeY * stride.y + ky * dilation.y - padding.y;
       
       // Check bounds
       // if (inputX >= 0 && inputX < inputSize.x && inputY >= 0 && inputY < inputSize.y) {
@@ -253,9 +258,9 @@ const ConvolutionVisualizer: React.FC = () => {
         const receptiveFieldNodes = calculateSingleNodeReceptiveField(
           node.x, node.y,
           conv.kernelSize, conv.stride, conv.dilation, conv.padding,
-          prevLayer.size
+          prevLayer.size,
+          temporalConvolutionMode
         );
-        console.log(node, receptiveFieldNodes, prevLayer.size);
         
         // Add all receptive field nodes to the next layer's highlights
         nextNodes.addAll(receptiveFieldNodes);
@@ -267,7 +272,7 @@ const ConvolutionVisualizer: React.FC = () => {
     }
 
     return highlightedByLayer;
-  }, [layerConfigs]);
+  }, [layerConfigs, temporalConvolutionMode]);
 
   const highlightedNodesByLayer = useMemo(() => {
     return calculateReceptiveField(receptiveFieldState);

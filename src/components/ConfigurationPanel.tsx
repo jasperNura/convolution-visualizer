@@ -250,7 +250,7 @@ const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({
             <strong>Layer Data:</strong> Shows varying heights/colors based on activation values.
           </div>
           <div>
-            <strong>Temporal Mode:</strong> Aligns bottom row of all convolution layers for temporal analysis.
+            <strong>Temporal Mode:</strong> Aligns bottom row of all convolution layers for temporal analysis and only apply padding to the top (past timesteps).
           </div>
           <div>
             <strong>Reverse order:</strong> Show last layer first.
