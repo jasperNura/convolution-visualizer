@@ -136,10 +136,6 @@ const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({
       <h2 style={{ marginTop: '0', marginBottom: '20px', fontSize: '18px' }}>
         🔧 Layer Configuration
       </h2>
-      
-      <div style={{ marginBottom: '20px', fontSize: '12px', color: '#ccc' }}>
-        <strong>Phase 3:</strong> Real-time Parameter Control
-      </div>
 
       {/* Settings Box */}
       <div style={{
@@ -152,7 +148,7 @@ const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({
         <h3 style={{ margin: '0 0 10px 0', fontSize: '14px', color: '#fff' }}>
           ⚙️ Visualization Settings
         </h3>
-        
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <label style={{
             display: 'flex',
@@ -214,8 +210,8 @@ const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({
             <span>Reverse Order</span>
           </label>
 
-          <div style={{ 
-            display: 'flex', 
+          <div style={{
+            display: 'flex',
             flexDirection: 'column',
             gap: '8px',
             marginTop: '8px',
@@ -251,10 +247,10 @@ const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({
             </div>
           </div>
         </div>
-        
-        <div style={{ 
-          marginTop: '8px', 
-          fontSize: '11px', 
+
+        <div style={{
+          marginTop: '8px',
+          fontSize: '11px',
           color: '#999',
           lineHeight: '1.3'
         }}>
@@ -281,7 +277,7 @@ const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({
         <h3 style={{ margin: '0 0 15px 0', fontSize: '14px', color: '#fff' }}>
           🔧 Layer Management
         </h3>
-        
+
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
           <button
             onClick={onAddLayer}
@@ -304,12 +300,12 @@ const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({
           >
             ➕ Add Conv Layer
           </button>
-          
+
           <span style={{ fontSize: '11px', color: '#ccc' }}>
             {layerConfigs.length - 1} convolution layer{layerConfigs.length - 1 !== 1 ? 's' : ''}
           </span>
         </div>
-        
+
         <div style={{ fontSize: '10px', color: '#999', marginTop: '8px', lineHeight: '1.2' }}>
           Add or remove convolution layers. The input layer cannot be removed.
         </div>
@@ -323,9 +319,9 @@ const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({
           borderRadius: '8px',
           border: `2px solid ${config.color}`
         }}>
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
             justifyContent: 'space-between',
             marginBottom: '15px'
           }}>
@@ -355,7 +351,7 @@ const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({
                 placeholder="Layer Name"
               />
             </div>
-            
+
             {/* Remove button - only show for convolution layers (not input layer) */}
             {index > 0 && (
               <button

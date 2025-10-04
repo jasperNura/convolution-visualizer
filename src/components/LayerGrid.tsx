@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { Vector3, BoxGeometry } from 'three';
 import { Text } from '@react-three/drei';
 import type { Node, NodeCounter } from './components.types';
+import { getHue } from './components.constants';
 
 interface LayerData {
   x: number;
@@ -23,17 +24,6 @@ interface LayerGridProps {
   useLayerData: boolean;
 }
 
-// Helper function to get hue from hex color
-const getHue = (hexColor: string): number => {
-  const colorMap: Record<string, number> = {
-    '#4CAF50': 120, // Green
-    '#2196F3': 210, // Blue  
-    '#9C27B0': 290, // Purple
-    '#FF5722': 14, //  Orange
-  };
-  return colorMap[hexColor] || 200; // Default to blue-ish
-};
-
 const isPaddingNode = (node: Node, layerSize: { x: number; y: number }): boolean => {
   return (
     node.x < 0 || node.x >= layerSize.x ||
@@ -41,11 +31,11 @@ const isPaddingNode = (node: Node, layerSize: { x: number; y: number }): boolean
   );
 };
 
-const LayerGrid: React.FC<LayerGridProps> = ({ 
-  data, 
-  position, 
-  color, 
-  size, 
+const LayerGrid: React.FC<LayerGridProps> = ({
+  data,
+  position,
+  color,
+  size,
   name,
   layerIndex,
   onNodeClick,
@@ -60,7 +50,7 @@ const LayerGrid: React.FC<LayerGridProps> = ({
       // Use layer data for visualization if enabled, otherwise use uniform values
       const intensity = useLayerData ? 0.3 + (item.value * 0.7) : 0.6;
       const height = useLayerData ? (item.activated ? 0.8 : 0.3) : 0.6;
-      
+
       // Calculate node coordinates in grid space
       const nodeX = Math.round(item.x + size.x / 2 - 0.5);
       const nodeY = Math.round(item.y + size.y / 2 - 0.5);
@@ -68,11 +58,11 @@ const LayerGrid: React.FC<LayerGridProps> = ({
       // Check if this node is highlighted
       const count = highlightedNodes.getCount({ x: nodeX, y: nodeY });
       const isHighlighted = count > 0;
-      
+
       // Check if this is the selected node
-      const isSelected = selectedNode?.x === nodeX && 
-                        selectedNode?.y === nodeY;
-      
+      const isSelected = selectedNode?.x === nodeX &&
+        selectedNode?.y === nodeY;
+
       // Determine color based on state
       let cubeColor: string;
       let edgeColor: string;
@@ -86,10 +76,10 @@ const LayerGrid: React.FC<LayerGridProps> = ({
         cubeColor = `hsl(${getHue(color)}, 70%, ${20 + intensity * 50}%)`;
         edgeColor = `hsl(${getHue(color)}, 70%, 10%)`;
       }
-      
+
       return (
         <group key={index}>
-          <mesh 
+          <mesh
             position={[
               position.x + item.x,
               position.y + item.y,
@@ -111,15 +101,15 @@ const LayerGrid: React.FC<LayerGridProps> = ({
             }}
           >
             <boxGeometry args={[0.8, 0.8, height]} />
-            <meshLambertMaterial 
+            <meshLambertMaterial
               color={cubeColor}
               emissive={isSelected ? '#222200' : isHighlighted ? '#220000' : '#000000'}
               emissiveIntensity={isSelected || isHighlighted ? 0.3 : 0}
-              // transparent
-              // opacity={isHighlighted ? 1 : 0.6}
+            // transparent
+            // opacity={isHighlighted ? 1 : 0.6}
             />
           </mesh>
-          
+
           {/* Edge lines for the cube */}
           <lineSegments
             position={[
@@ -144,37 +134,37 @@ const LayerGrid: React.FC<LayerGridProps> = ({
       const posY = node.y - size.y / 2 + 0.5;
 
       return (
-          <mesh key={`padding-${index}`} 
-            position={[
-              position.x + posX,
-              position.y + posY,
-              position.z + height / 2
-            ]}
-            castShadow
-            receiveShadow
-          >
-            <boxGeometry args={[0.8, 0.8, height]} />
-            <meshLambertMaterial 
-              color='#ffffff'
-              transparent
-              opacity={0.3}
-            />
-          </mesh>
+        <mesh key={`padding-${index}`}
+          position={[
+            position.x + posX,
+            position.y + posY,
+            position.z + height / 2
+          ]}
+          castShadow
+          receiveShadow
+        >
+          <boxGeometry args={[0.8, 0.8, height]} />
+          <meshLambertMaterial
+            color='#ffffff'
+            transparent
+            opacity={0.3}
+          />
+        </mesh>
       );
     });
   }, [position, highlightedNodes, size]);
 
   // Create base platform for the layer
   const platform = useMemo(() => (
-    <mesh 
+    <mesh
       position={[position.x, position.y, position.z - 0.1]}
       receiveShadow
     >
       <boxGeometry args={[size.x + 1, size.y + 1, 0.1]} />
-      <meshLambertMaterial 
-        color="#333333" 
-        opacity={0.7} 
-        transparent 
+      <meshLambertMaterial
+        color="#333333"
+        opacity={0.7}
+        transparent
       />
     </mesh>
   ), [position, size]);
@@ -185,7 +175,7 @@ const LayerGrid: React.FC<LayerGridProps> = ({
       {cubes}
       {padding}
       <Text
-        position={[position.x, position.y - size.y/2 - 1.5, position.z + 1]}
+        position={[position.x, position.y - size.y / 2 - 1.5, position.z + 1]}
         fontSize={0.5}
         color="white"
         anchorX="center"
@@ -194,7 +184,7 @@ const LayerGrid: React.FC<LayerGridProps> = ({
         {name}
       </Text>
       <Text
-        position={[position.x, position.y - size.y/2 - 2, position.z + 1]}
+        position={[position.x, position.y - size.y / 2 - 2, position.z + 1]}
         fontSize={0.3}
         color="#cccccc"
         anchorX="center"
