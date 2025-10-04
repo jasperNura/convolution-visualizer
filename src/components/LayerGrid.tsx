@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Vector3 } from 'three';
+import { Vector3, BoxGeometry } from 'three';
 import { Text } from '@react-three/drei';
 import type { Node, NodeCounter } from './components.types';
 
@@ -20,6 +20,7 @@ interface LayerGridProps {
   onNodeClick: (layerIndex: number, nodeX: number, nodeY: number) => void;
   highlightedNodes: NodeCounter;
   selectedNode: Node | null;
+  useLayerData: boolean;
 }
 
 // Helper function to get hue from hex color
@@ -41,14 +42,16 @@ const LayerGrid: React.FC<LayerGridProps> = ({
   layerIndex,
   onNodeClick,
   highlightedNodes,
-  selectedNode
+  selectedNode,
+  useLayerData
 }) => {
   // Create cubes for each neuron/activation
   const cubes = useMemo(() => {
     const maxHighlightCount = highlightedNodes.getMaxCount();
     return data.map((item, index) => {
-      const intensity = 0.3 + (item.value * 0.7);
-      const height = item.activated ? 0.8 : 0.3;
+      // Use layer data for visualization if enabled, otherwise use uniform values
+      const intensity = useLayerData ? 0.3 + (item.value * 0.7) : 0.6;
+      const height = useLayerData ? (item.activated ? 0.8 : 0.3) : 0.6;
       
       // Calculate node coordinates in grid space
       const nodeX = Math.round(item.x + size.x / 2 - 0.5);
@@ -64,49 +67,66 @@ const LayerGrid: React.FC<LayerGridProps> = ({
       
       // Determine color based on state
       let cubeColor: string;
+      let edgeColor: string;
       if (isSelected) {
         cubeColor = '#FFD700'; // Gold for selected
+        edgeColor = '#312a00'; // Darker gold for edge
       } else if (isHighlighted) {
         cubeColor = `hsl(0, ${count / maxHighlightCount * 100}%, 50%)`;
+        edgeColor = `hsl(0, ${count / maxHighlightCount * 100}%, 20%)`;
       } else {
         cubeColor = `hsl(${getHue(color)}, 70%, ${20 + intensity * 50}%)`;
+        edgeColor = `hsl(${getHue(color)}, 70%, 10%)`;
       }
       
       return (
-        <mesh 
-          key={index}
-          position={[
-            position.x + item.x,
-            position.y + item.y,
-            position.z + height / 2
-          ]}
-          castShadow
-          receiveShadow
-          onClick={(e) => {
-            e.stopPropagation();
-            onNodeClick(layerIndex, nodeX, nodeY);
-          }}
-          onPointerOver={(e) => {
-            e.stopPropagation();
-            document.body.style.cursor = 'pointer';
-          }}
-          onPointerOut={(e) => {
-            e.stopPropagation();
-            document.body.style.cursor = 'default';
-          }}
-        >
-          <boxGeometry args={[0.8, 0.8, height]} />
-          <meshLambertMaterial 
-            color={cubeColor}
-            emissive={isSelected ? '#222200' : isHighlighted ? '#220000' : '#000000'}
-            emissiveIntensity={isSelected || isHighlighted ? 0.3 : 0}
-            // transparent
-            // opacity={isHighlighted ? 1 : 0.6}
-          />
-        </mesh>
+        <group key={index}>
+          <mesh 
+            position={[
+              position.x + item.x,
+              position.y + item.y,
+              position.z + height / 2
+            ]}
+            castShadow
+            receiveShadow
+            onClick={(e) => {
+              e.stopPropagation();
+              onNodeClick(layerIndex, nodeX, nodeY);
+            }}
+            onPointerOver={(e) => {
+              e.stopPropagation();
+              document.body.style.cursor = 'pointer';
+            }}
+            onPointerOut={(e) => {
+              e.stopPropagation();
+              document.body.style.cursor = 'default';
+            }}
+          >
+            <boxGeometry args={[0.8, 0.8, height]} />
+            <meshLambertMaterial 
+              color={cubeColor}
+              emissive={isSelected ? '#222200' : isHighlighted ? '#220000' : '#000000'}
+              emissiveIntensity={isSelected || isHighlighted ? 0.3 : 0}
+              // transparent
+              // opacity={isHighlighted ? 1 : 0.6}
+            />
+          </mesh>
+          
+          {/* Edge lines for the cube */}
+          <lineSegments
+            position={[
+              position.x + item.x,
+              position.y + item.y,
+              position.z + height / 2
+            ]}
+          >
+            <edgesGeometry args={[new BoxGeometry(0.8, 0.8, height)]} />
+            <lineBasicMaterial color={edgeColor} opacity={0.9} transparent />
+          </lineSegments>
+        </group>
       );
     });
-  }, [data, position, color, layerIndex, highlightedNodes, selectedNode, onNodeClick, size]);
+  }, [data, position, color, layerIndex, highlightedNodes, selectedNode, onNodeClick, size, useLayerData]);
 
   // Create base platform for the layer
   const platform = useMemo(() => (

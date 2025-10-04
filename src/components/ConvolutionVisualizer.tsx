@@ -117,20 +117,6 @@ const calculateSingleNodeReceptiveField = (
   return receptiveField;
 };
 
-// Helper function to remove duplicate nodes
-const removeDuplicateNodes = (nodes: Node[]): Node[] => {
-  const unique: Node[] = [];
-  
-  for (const node of nodes) {
-    const exists = unique.find(u => u.x === node.x && u.y === node.y);
-    if (!exists) {
-      unique.push(node);
-    }
-  }
-  
-  return unique;
-};
-
 // Helper function to generate layer data
 const generateLayerData = (size: { x: number; y: number }) => {
   const data = [];
@@ -150,13 +136,9 @@ const generateLayerData = (size: { x: number; y: number }) => {
 };
 
 // Helper function to generate connection lines between layers
-const generateConnectionLines = (configs: LayerConfig[], fromLayerIdx: number, toLayerIdx: number) => {
+const generateConnectionLines = (fromLayer: LayerConfig, fromPos: Vector3, toLayer: LayerConfig, toPos: Vector3) => {
   const positions = [];
   const step = 3; // Only draw some connections to avoid clutter
-  const fromPos = new Vector3(0, 0, 6 * (1 - fromLayerIdx));
-  const toPos = new Vector3(0, 0, 6 * (1 - toLayerIdx));
-  const fromLayer = configs[fromLayerIdx];
-  const toLayer = configs[toLayerIdx];
 
   for (let i = 0; i < fromLayer.size.x; i += step) {
     for (let j = 0; j < fromLayer.size.y; j += step) {
@@ -178,15 +160,22 @@ const generateConnectionLines = (configs: LayerConfig[], fromLayerIdx: number, t
 };
 
 // Component for rendering connection lines
-const ConnectionLines: React.FC<{ layerConfigs: LayerConfig[] }> = ({ layerConfigs }) => {
+const ConnectionLines: React.FC<{ 
+  layerConfigs: LayerConfig[]; 
+  layerPositions: Vector3[];
+}> = ({ layerConfigs, layerPositions }) => {
   const lines = useMemo(() => {
     const allLines = [];
     for (let i = 0; i < layerConfigs.length - 1; i++) {
-      const positions = generateConnectionLines(layerConfigs, i, i + 1);
+      const fromPos = layerPositions[i];
+
+      const toPos = layerPositions[i + 1];
+
+      const positions = generateConnectionLines(layerConfigs[i], fromPos, layerConfigs[i + 1], toPos);
       allLines.push(positions);
     }
     return allLines;
-  }, [layerConfigs]);
+  }, [layerConfigs, layerPositions]);
 
   return (
     <>
@@ -214,6 +203,10 @@ const ConvolutionVisualizer: React.FC = () => {
     selectedNode: null,
     selectedLayer: null,
   });
+
+  // State for visualization settings
+  const [useLayerData, setUseLayerData] = useState(true);
+  const [temporalConvolutionMode, setTemporalConvolutionMode] = useState(false);
 
   // Calculate receptive field for a given node
   const calculateReceptiveField = useCallback((state: ReceptiveFieldState): NodeCounter[] => {
@@ -306,6 +299,19 @@ const ConvolutionVisualizer: React.FC = () => {
     });
   }, [calculateReceptiveField]);
 
+  // Calculate layer position based on temporal convolution mode
+  const calculateLayerPosition = useCallback((config: LayerConfig, index: number): Vector3 => {
+    if (temporalConvolutionMode) {
+      // In temporal mode, align the bottom row of all layers
+      const maxSizeY = layerConfigs[0].size.y;
+      const yOffset = (maxSizeY - config.size.y) / 2;
+      return new Vector3(0, -yOffset, 6 * (1 - index));
+    } else {
+      // Normal mode - center all layers
+      return new Vector3(0, 0, 6 * (1 - index));
+    }
+  }, [temporalConvolutionMode, layerConfigs]);
+
   // Generate layer data for rendering
   const layerData = useMemo(() => {
     return layerConfigs.map(config => generateLayerData(config.size));
@@ -317,6 +323,10 @@ const ConvolutionVisualizer: React.FC = () => {
       <ConfigurationPanel
         layerConfigs={layerConfigs}
         onConfigChange={handleConfigurationChange}
+        useLayerData={useLayerData}
+        onUseLayerDataChange={setUseLayerData}
+        temporalConvolutionMode={temporalConvolutionMode}
+        onTemporalConvolutionModeChange={setTemporalConvolutionMode}
       />
       
       {/* 3D Canvas */}
@@ -345,7 +355,7 @@ const ConvolutionVisualizer: React.FC = () => {
             <LayerGrid
               key={`${config.name}-${config.size.x}x${config.size.y}`} // Include size in key for re-rendering
               data={layerData[index]}
-              position={new Vector3(0, 0, 6 * (1 - index))}
+              position={calculateLayerPosition(config, index)}
               color={config.color}
               size={config.size}
               name={config.name}
@@ -353,11 +363,15 @@ const ConvolutionVisualizer: React.FC = () => {
               onNodeClick={handleNodeClick}
               highlightedNodes={highlightedNodesByLayer[index] || new Map()}
               selectedNode={receptiveFieldState.selectedLayer === index ? receptiveFieldState.selectedNode : null}
+              useLayerData={useLayerData}
             />
           ))}
 
           {/* Connection lines between layers */}
-          <ConnectionLines layerConfigs={layerConfigs} />
+          <ConnectionLines 
+            layerConfigs={layerConfigs}
+            layerPositions={layerConfigs.map((config, index) => calculateLayerPosition(config, index))}
+          />
 
           <OrbitControls
             enableDamping 

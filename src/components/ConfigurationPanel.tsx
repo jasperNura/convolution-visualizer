@@ -54,11 +54,19 @@ const ConvolutionParameter: React.FC<ConvolutionParameterProps> = ({
 interface ConfigurationPanelProps {
   layerConfigs: LayerConfigTemplate[];
   onConfigChange: (index: number, config: LayerConfigTemplate) => void;
+  useLayerData: boolean;
+  onUseLayerDataChange: (useLayerData: boolean) => void;
+  temporalConvolutionMode: boolean;
+  onTemporalConvolutionModeChange: (temporalMode: boolean) => void;
 }
 
 const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({
   layerConfigs,
-  onConfigChange
+  onConfigChange,
+  useLayerData,
+  onUseLayerDataChange,
+  temporalConvolutionMode,
+  onTemporalConvolutionModeChange
 }) => {
   const handleConvolutionChange = (
     layerIndex: number,
@@ -109,6 +117,75 @@ const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({
       
       <div style={{ marginBottom: '20px', fontSize: '12px', color: '#ccc' }}>
         <strong>Phase 3:</strong> Real-time Parameter Control
+      </div>
+
+      {/* Settings Box */}
+      <div style={{
+        marginBottom: '25px',
+        padding: '15px',
+        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        borderRadius: '8px',
+        border: '1px solid rgba(255, 255, 255, 0.2)'
+      }}>
+        <h3 style={{ margin: '0 0 10px 0', fontSize: '14px', color: '#fff' }}>
+          ⚙️ Visualization Settings
+        </h3>
+        
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <label style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            fontSize: '12px',
+            cursor: 'pointer'
+          }}>
+            <input
+              type="checkbox"
+              checked={useLayerData}
+              onChange={(e) => onUseLayerDataChange(e.target.checked)}
+              style={{
+                width: '16px',
+                height: '16px',
+                accentColor: '#4CAF50'
+              }}
+            />
+            <span>Use Layer Data for visualization</span>
+          </label>
+
+          <label style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            fontSize: '12px',
+            cursor: 'pointer'
+          }}>
+            <input
+              type="checkbox"
+              checked={temporalConvolutionMode}
+              onChange={(e) => onTemporalConvolutionModeChange(e.target.checked)}
+              style={{
+                width: '16px',
+                height: '16px',
+                accentColor: '#2196F3'
+              }}
+            />
+            <span>Temporal Convolution Mode</span>
+          </label>
+        </div>
+        
+        <div style={{ 
+          marginTop: '8px', 
+          fontSize: '11px', 
+          color: '#999',
+          lineHeight: '1.3'
+        }}>
+          <div style={{ marginBottom: '4px' }}>
+            <strong>Layer Data:</strong> Shows varying heights/colors based on activation values.
+          </div>
+          <div>
+            <strong>Temporal Mode:</strong> Aligns bottom row of all convolution layers for temporal analysis.
+          </div>
+        </div>
       </div>
 
       {layerConfigs.map((config, index) => (
