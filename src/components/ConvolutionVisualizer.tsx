@@ -96,7 +96,7 @@ const calculateSingleNodeReceptiveField = (
   stride: { x: number; y: number },
   dilation: { x: number; y: number },
   padding: { x: number; y: number },
-  inputSize: { x: number; y: number },
+  _inputSize: { x: number; y: number },
   temporalMode: boolean = false
 ): Node[] => {
   const receptiveField: Node[] = [];
@@ -252,7 +252,7 @@ const ConvolutionVisualizer: React.FC = () => {
       const conv = currentLayerConfig.convolution;
 
       // For each node in the current layer, calculate its receptive field in the previous layer
-      for (const [node, _] of currentNodes) {
+      for (const [node, ] of currentNodes) {
         if (node.x < 0 || node.x >= currSize.x || node.y < 0 || node.y >= currSize.y) {
           // If the node is out of bounds, move on (this can happen with padding)
           continue;
@@ -279,7 +279,7 @@ const ConvolutionVisualizer: React.FC = () => {
 
   const highlightedNodesByLayer = useMemo(() => {
     return calculateReceptiveField(receptiveFieldState);
-  }, [layerConfigs, receptiveFieldState]);
+  }, [receptiveFieldState, calculateReceptiveField]);
 
   // Animation functions
   const getNextNode = useCallback((currentNode: Node | null, layerSize: { x: number; y: number }): Node => {
@@ -349,7 +349,7 @@ const ConvolutionVisualizer: React.FC = () => {
   const handleInputLayerSizeChange = useCallback((newSize: Size) => {
     setInputLayerSize(newSize);
     setLayerConfigs(calculateLayerSizes(layerConfigs, newSize, temporalConvolutionMode));
-  }, [layerConfigs, inputLayerSize, temporalConvolutionMode]);
+  }, [layerConfigs, temporalConvolutionMode]);
 
   // Handle layer configuration updates
   const handleConfigurationChange = useCallback((index: number, configTemplate: LayerConfigTemplate) => {
@@ -404,7 +404,7 @@ const ConvolutionVisualizer: React.FC = () => {
     const newTemplates = [...currentTemplates, newLayer];
     const newConfigs = calculateLayerSizes(newTemplates, inputLayerSize, temporalConvolutionMode);
     setLayerConfigs(newConfigs);
-  }, [layerConfigs, temporalConvolutionMode]);
+  }, [layerConfigs, inputLayerSize, temporalConvolutionMode]);
 
   // Remove layer by index
   const handleRemoveLayer = useCallback((index: number) => {
@@ -433,7 +433,7 @@ const ConvolutionVisualizer: React.FC = () => {
         selectedLayer: receptiveFieldState.selectedLayer - 1,
       });
     }
-  }, [layerConfigs, temporalConvolutionMode, receptiveFieldState, setLayerConfigs]);
+  }, [layerConfigs, inputLayerSize, temporalConvolutionMode, receptiveFieldState, setLayerConfigs]);
 
   // Handle node click
   const handleNodeClick = useCallback((layerIndex: number, x: number, y: number) => {
@@ -441,7 +441,7 @@ const ConvolutionVisualizer: React.FC = () => {
       selectedNode: { x, y },
       selectedLayer: layerIndex,
     });
-  }, [calculateReceptiveField]);
+  }, []);
 
   // Calculate layer position based on temporal convolution mode
   const calculateLayerPosition = useCallback((config: LayerConfig, index: number): Vector3 => {

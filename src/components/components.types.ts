@@ -18,7 +18,8 @@ export interface LayerConfig {
   convolution?: ConvolutionConfig;
 }
 
-export interface LayerConfigTemplate extends Omit<LayerConfig, 'size'> { }
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface LayerConfigTemplate extends Omit<LayerConfig, 'size'> {}
 
 export interface Node {
   x: number;
