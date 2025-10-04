@@ -1,8 +1,10 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
-import { Vector3, CatmullRomCurve3 } from 'three';
+import { Vector3 } from 'three';
 import LayerGrid from './LayerGrid';
+import ConfigurationPanel from './ConfigurationPanel';
+import type { LayerConfigTemplate, LayerConfig } from './components.types';
 
 // Types for receptive field highlighting
 interface HighlightedNode {
@@ -13,7 +15,6 @@ interface HighlightedNode {
 interface ReceptiveFieldState {
   selectedNode: HighlightedNode | null;
   selectedLayer: number | null;
-  highlightedNodesByLayer: HighlightedNode[][];
 }
 
 // Utility function to calculate output size given input size and convolution parameters
@@ -21,48 +22,8 @@ const calculateOutputSize = (inputSize: number, kernelSize: number, stride: numb
   return Math.floor((inputSize + 2 * padding - dilation * (kernelSize - 1) - 1) / stride + 1);
 };
 
-// Utility function to format convolution parameters for display
-const formatConvParams = (conv: LayerConfig['convolution']): string => {
-  if (!conv) return '';
-  const { kernelSize, stride, dilation } = conv;
-  
-  let result = `${kernelSize.x}x${kernelSize.y}`;
-  
-  if (stride.x !== 1 || stride.y !== 1) {
-    if (stride.x === stride.y) {
-      result += `, S${stride.x}`;
-    } else {
-      result += `, S${stride.x}x${stride.y}`;
-    }
-  }
-  
-  if (dilation.x !== 1 || dilation.y !== 1) {
-    if (dilation.x === dilation.y) {
-      result += `, D${dilation.x}`;
-    } else {
-      result += `, D${dilation.x}x${dilation.y}`;
-    }
-  }
-  
-  return result;
-};
-
-// Types for layer configuration
-interface LayerConfig {
-  size: { x: number; y: number };
-  name: string;
-  position: Vector3;
-  color: string;
-  convolution?: {
-    kernelSize: { x: number; y: number };
-    stride: { x: number; y: number };
-    dilation: { x: number; y: number };
-    padding: { x: number; y: number };
-  };
-}
-
 // Function to calculate layer sizes based on convolution parameters
-const calculateLayerSizes = (configs: Omit<LayerConfig, 'size'>[]): LayerConfig[] => {
+const calculateLayerSizes = (configs: LayerConfigTemplate[]): LayerConfig[] => {
   const result: LayerConfig[] = [];
   
   for (let i = 0; i < configs.length; i++) {
@@ -92,17 +53,15 @@ const calculateLayerSizes = (configs: Omit<LayerConfig, 'size'>[]): LayerConfig[
   return result;
 };
 
-// Configuration for the convolution layers with various parameters
-const LAYER_CONFIG_TEMPLATES: Omit<LayerConfig, 'size'>[] = [
+// Initial configuration templates
+const INITIAL_LAYER_CONFIG_TEMPLATES: LayerConfigTemplate[] = [
   {
     name: 'Input Layer',
-    position: new Vector3(0, 0, 6),
     color: '#4CAF50'
     // No convolution parameters for input layer
   },
   {
-    name: 'Conv1', // Will be updated with calculated parameters
-    position: new Vector3(0, 0, 0),
+    name: 'Conv1',
     color: '#2196F3',
     convolution: {
       kernelSize: { x: 3, y: 3 },
@@ -112,8 +71,7 @@ const LAYER_CONFIG_TEMPLATES: Omit<LayerConfig, 'size'>[] = [
     }
   },
   {
-    name: 'Conv2', // Will be updated with calculated parameters
-    position: new Vector3(0, 0, -6),
+    name: 'Conv2',
     color: '#9C27B0',
     convolution: {
       kernelSize: { x: 1, y: 3 },
@@ -123,8 +81,7 @@ const LAYER_CONFIG_TEMPLATES: Omit<LayerConfig, 'size'>[] = [
     }
   },
   {
-    name: 'Conv3', // Will be updated with calculated parameters
-    position: new Vector3(0, 0, -12),
+    name: 'Conv3',
     color: '#FF5722',
     convolution: {
       kernelSize: { x: 3, y: 2 },
@@ -135,301 +92,335 @@ const LAYER_CONFIG_TEMPLATES: Omit<LayerConfig, 'size'>[] = [
   }
 ];
 
-// Calculate layer sizes and update names
-const LAYER_CONFIGS: LayerConfig[] = calculateLayerSizes(LAYER_CONFIG_TEMPLATES).map(config => ({
-  ...config,
-  name: config.convolution 
-    ? `${config.name} (${formatConvParams(config.convolution)}) - ${config.size.x}×${config.size.y}`
-    : `${config.name} - ${config.size.x}×${config.size.y}`
-}));
+// Helper function to calculate receptive field for a single node
+const calculateSingleNodeReceptiveField = (
+  nodeX: number, 
+  nodeY: number,
+  kernelSize: { x: number; y: number },
+  stride: { x: number; y: number },
+  dilation: { x: number; y: number },
+  padding: { x: number; y: number },
+  inputSize: { x: number; y: number }
+): HighlightedNode[] => {
+  const receptiveField: HighlightedNode[] = [];
+  
+  // For each position in the kernel
+  for (let kx = 0; kx < kernelSize.x; kx++) {
+    for (let ky = 0; ky < kernelSize.y; ky++) {
+      // Calculate the actual input position considering stride, dilation, and padding
+      // Formula: input_pos = output_pos * stride + kernel_pos * dilation - padding
+      const inputX = nodeX * stride.x + kx * dilation.x - padding.x;
+      const inputY = nodeY * stride.y + ky * dilation.y - padding.y;
+      
+      // Check bounds
+      if (inputX >= 0 && inputX < inputSize.x && inputY >= 0 && inputY < inputSize.y) {
+        receptiveField.push({ x: inputX, y: inputY });
+      }
+    }
+  }
+  
+  return receptiveField;
+};
+
+// Helper function to remove duplicate nodes
+const removeDuplicateNodes = (nodes: HighlightedNode[]): HighlightedNode[] => {
+  const unique: HighlightedNode[] = [];
+  
+  for (const node of nodes) {
+    const exists = unique.find(u => u.x === node.x && u.y === node.y);
+    if (!exists) {
+      unique.push(node);
+    }
+  }
+  
+  return unique;
+};
+
+// Helper function to generate layer data
+const generateLayerData = (size: { x: number; y: number }) => {
+  const data = [];
+  for (let i = 0; i < size.x; i++) {
+    for (let j = 0; j < size.y; j++) {
+      // Generate some sample activation values
+      const value = Math.random() * 0.8 + 0.2;
+      data.push({
+        x: i - size.x / 2 + 0.5,
+        y: j - size.y / 2 + 0.5,
+        value: value,
+        activated: value > 0.5
+      });
+    }
+  }
+  return data;
+};
+
+// Helper function to generate connection lines between layers
+const generateConnectionLines = (configs: LayerConfig[], fromLayerIdx: number, toLayerIdx: number) => {
+  const positions = [];
+  const step = 3; // Only draw some connections to avoid clutter
+  const fromPos = new Vector3(0, 0, 6 * (1 - fromLayerIdx));
+  const toPos = new Vector3(0, 0, 6 * (1 - toLayerIdx));
+  const fromLayer = configs[fromLayerIdx];
+  const toLayer = configs[toLayerIdx];
+
+  for (let i = 0; i < fromLayer.size.x; i += step) {
+    for (let j = 0; j < fromLayer.size.y; j += step) {
+      const fromX = fromPos.x + i - fromLayer.size.x / 2 + 0.5;
+      const fromY = fromPos.y + j - fromLayer.size.y / 2 + 0.5;
+      const fromZ = fromPos.z;
+
+      // Connect to corresponding region in the next layer
+      const toX = toPos.x + (i * toLayer.size.x / fromLayer.size.x) - toLayer.size.x / 2 + 0.5;
+      const toY = toPos.y + (j * toLayer.size.y / fromLayer.size.y) - toLayer.size.y / 2 + 0.5;
+      const toZ = toPos.z;
+
+      positions.push(fromX, fromY, fromZ);
+      positions.push(toX, toY, toZ);
+    }
+  }
+  
+  return positions;
+};
+
+// Component for rendering connection lines
+const ConnectionLines: React.FC<{ layerConfigs: LayerConfig[] }> = ({ layerConfigs }) => {
+  const lines = useMemo(() => {
+    const allLines = [];
+    for (let i = 0; i < layerConfigs.length - 1; i++) {
+      const positions = generateConnectionLines(layerConfigs, i, i + 1);
+      allLines.push(positions);
+    }
+    return allLines;
+  }, [layerConfigs]);
+
+  return (
+    <>
+      {lines.map((positions, index) => (
+        <lineSegments key={`connection-${index}`}>
+          <bufferGeometry>
+            <bufferAttribute
+              attach="attributes-position"
+              args={[new Float32Array(positions), 3]}
+            />
+          </bufferGeometry>
+          <lineBasicMaterial color="#ffffff" opacity={0.3} transparent />
+        </lineSegments>
+      ))}
+    </>
+  );
+};
 
 const ConvolutionVisualizer: React.FC = () => {
+  // State for layer configuration
+  const [layerConfigs, setLayerConfigs] = useState(calculateLayerSizes(INITIAL_LAYER_CONFIG_TEMPLATES));
+
   // State for receptive field highlighting
   const [receptiveFieldState, setReceptiveFieldState] = useState<ReceptiveFieldState>({
     selectedNode: null,
     selectedLayer: null,
-    highlightedNodesByLayer: LAYER_CONFIGS.map(() => []) // Initialize with empty arrays for each layer
   });
 
   // Calculate receptive field for a given node
-  const calculateReceptiveField = useCallback((layerIndex: number, nodeX: number, nodeY: number): HighlightedNode[][] => {
-    const highlightedByLayer: HighlightedNode[][] = LAYER_CONFIGS.map(() => []); // Create empty arrays for each layer
+  const calculateReceptiveField = useCallback((state: ReceptiveFieldState): HighlightedNode[][] => {
+    const highlightedByLayer: HighlightedNode[][] = layerConfigs.map(() => []); // Create empty arrays for each layer
+    if (state.selectedNode  == null || state.selectedLayer == null) {
+      return highlightedByLayer;
+    }
+    // Start from the clicked layer and work backwards to input layer
+    let currentLayer = state.selectedLayer;
+    let currentNodes: HighlightedNode[] = [{ x: state.selectedNode.x, y: state.selectedNode.y }];
     
-    // Add the clicked node itself
-    highlightedByLayer[layerIndex].push({
-      x: nodeX,
-      y: nodeY
-    });
-
-    // Recursively calculate receptive field for all previous layers
-    const calculateReceptiveFieldRecursive = (currentLayer: number) => {
-      if (currentLayer === 0) return; // Base case: reached input layer
-      
-      // Note: previous here refers to the layer earlier in the network, but we're calculating the receptive field backwards
-      // so it's actually the next layer in terms of processing
-      const prevLayer = LAYER_CONFIGS[currentLayer - 1];
-      const currentLayerConfig = LAYER_CONFIGS[currentLayer];
-      
-      // Skip if no convolution parameters (shouldn't happen for layers > 0)
-      if (!currentLayerConfig.convolution) return;
-      
-      const { kernelSize, stride, dilation, padding } = currentLayerConfig.convolution;
-      
-      // For each node in current layer, find its receptive field in previous layer
-      highlightedByLayer[currentLayer].forEach(outputNode => {
-        // Calculate the receptive field in the previous layer
-        // For each position in the kernel
-        for (let kx = 0; kx < kernelSize.x; kx++) {
-          for (let ky = 0; ky < kernelSize.y; ky++) {
-            // Calculate the actual input position considering stride, dilation, and padding
-            // Formula: input_pos = output_pos * stride + kernel_pos * dilation - padding
-            const inputX = outputNode.x * stride.x + kx * dilation.x - padding.x;
-            const inputY = outputNode.y * stride.y + ky * dilation.y - padding.y;
-            
-            // Check bounds
-            if (inputX >= 0 && inputX < prevLayer.size.x && inputY >= 0 && inputY < prevLayer.size.y) {
-              // Check if this node is already in the list to avoid duplicates
-              const existing = highlightedByLayer[currentLayer - 1].find(h => h.x === inputX && h.y === inputY);
-              
-              if (!existing) {
-                const newNode: HighlightedNode = {
-                  x: inputX,
-                  y: inputY
-                };
-                highlightedByLayer[currentLayer - 1].push(newNode);
-              }
-            }
-          }
-        }
-      });
-      
-      calculateReceptiveFieldRecursive(currentLayer - 1);
-    };
+    // Add the clicked node to its layer
+    highlightedByLayer[currentLayer] = [...currentNodes];
     
-    // Start recursive calculation from the clicked layer
-    calculateReceptiveFieldRecursive(layerIndex);
-    
-    return highlightedByLayer;
-  }, []);
-
-  // Handle node click
-  const handleNodeClick = useCallback((layerIndex: number, nodeX: number, nodeY: number) => {
-    const highlightedNodesByLayer = calculateReceptiveField(layerIndex, nodeX, nodeY);
-    
-    setReceptiveFieldState({
-      selectedNode: {
-        x: nodeX,
-        y: nodeY
-      },
-      selectedLayer: layerIndex,
-      highlightedNodesByLayer
-    });
-  }, [calculateReceptiveField]);
-  // Generate sample data for each layer
-  const layerData = useMemo(() => {
-    const generateLayerData = (size: { x: number; y: number }) => {
-      const data = [];
-      for (let i = 0; i < size.x; i++) {
-        for (let j = 0; j < size.y; j++) {
-          // Generate some sample activation values
-          const value = Math.random() * 0.8 + 0.2;
-          data.push({
-            x: i - size.x / 2 + 0.5,
-            y: j - size.y / 2 + 0.5,
-            value: value,
-            activated: value > 0.5
-          });
-        }
+    // Work backwards through layers
+    while (currentLayer > 0) {
+      const nextNodes: HighlightedNode[] = [];
+      
+      // Get the layer configuration for the previous layer and current layer
+      const prevLayer = layerConfigs[currentLayer - 1];
+      const currentLayerConfig = layerConfigs[currentLayer];
+      
+      if (!currentLayerConfig.convolution) {
+        currentLayer--;
+        continue;
       }
-      return data;
-    };
-
-    return LAYER_CONFIGS.map(config => generateLayerData(config.size));
-  }, []);
-
-  return (
-    <div style={{ width: '100vw', height: '100vh', backgroundColor: '#1a1a1a' }}>
-      <Canvas
-        camera={{ 
-          position: [15, 10, 15], 
-          fov: 60 
-        }}
-        style={{ background: 'linear-gradient(to bottom, #2c3e50, #34495e)' }}
-        gl={{ 
-          antialias: true,
-          alpha: true,
-          powerPreference: "high-performance"
-        }}
-      >
-        <ambientLight intensity={0.4} />
-        <directionalLight 
-          position={[10, 10, 10]} 
-          intensity={0.8}
-          castShadow
-        />
-        <pointLight position={[-10, -10, -10]} intensity={0.3} />
-
-        {LAYER_CONFIGS.map((config, index) => (
-          <LayerGrid
-            key={index}
-            data={layerData[index]}
-            position={config.position}
-            color={config.color}
-            size={config.size}
-            name={config.name}
-            layerIndex={index}
-            onNodeClick={handleNodeClick}
-            highlightedNodes={receptiveFieldState.highlightedNodesByLayer[index]}
-            selectedNode={receptiveFieldState.selectedLayer === index ? receptiveFieldState.selectedNode : null}
-          />
-        ))}
-
-        {/* Connection lines between layers */}
-        {LAYER_CONFIGS.slice(0, -1).map((config, index) => (
-          <ConnectionLines 
-            key={`connection-${index}`}
-            from={config.position}
-            to={LAYER_CONFIGS[index + 1].position}
-            fromSize={config.size}
-            toSize={LAYER_CONFIGS[index + 1].size}
-          />
-        ))}
-
-        <OrbitControls 
-          enableDamping 
-          dampingFactor={0.05}
-          minDistance={5}
-          maxDistance={50}
-        />
-      </Canvas>
       
-      {/* UI Overlay */}
-      <div style={{
-        position: 'absolute',
-        top: '20px',
-        left: '20px',
-        color: 'white',
-        fontSize: '18px',
-        fontFamily: 'Arial, sans-serif',
-        textShadow: '2px 2px 4px rgba(0,0,0,0.7)',
-        maxWidth: '400px'
-      }}>
-        <h2>3D Convolution Neural Network Visualizer</h2>
-        <p><strong>Phase 2+: Advanced Convolution Parameters</strong></p>
-        <ul style={{ fontSize: '14px', marginTop: '10px' }}>
-          {LAYER_CONFIGS.map((config, index) => (
-            <li key={index} style={{ color: config.color }}>
-              {config.name}
-            </li>
-          ))}
-        </ul>
+      const conv = currentLayerConfig.convolution;
+      
+      // For each node in the current layer, calculate its receptive field in the previous layer
+      for (const node of currentNodes) {
+        // Calculate the receptive field for this node
+        const receptiveFieldNodes = calculateSingleNodeReceptiveField(
+          node.x, node.y,
+          conv.kernelSize, conv.stride, conv.dilation, conv.padding,
+          prevLayer.size
+        );
         
-        <div style={{ 
-          marginTop: '15px', 
-          padding: '10px', 
-          backgroundColor: 'rgba(0,0,0,0.5)', 
-          borderRadius: '5px',
-          fontSize: '12px'
-        }}>
-          <strong>🔧 Enhanced Features:</strong>
-          <ul style={{ marginTop: '5px', marginBottom: '0' }}>
-            <li><strong>Asymmetric Kernels:</strong> Different x/y sizes (e.g., 5x3)</li>
-            <li><strong>Independent Strides:</strong> Different x/y step sizes</li>
-            <li><strong>Asymmetric Dilation:</strong> Different x/y spacing</li>
-            <li><strong>Precise Receptive Fields:</strong> Accurate for all parameters</li>
-          </ul>
-        </div>
-        
-        <div style={{ 
-          marginTop: '15px', 
-          padding: '10px', 
-          backgroundColor: 'rgba(0,0,0,0.5)', 
-          borderRadius: '5px',
-          fontSize: '14px'
-        }}>
-          <strong>🖱️ Click Interactions:</strong>
-          <ul style={{ marginTop: '5px', marginBottom: '0' }}>
-            <li><span style={{color: '#FFD700'}}>●</span> Selected node (gold)</li>
-            <li><span style={{color: '#FF6B6B'}}>●</span> Receptive field (red)</li>
-            <li>Click any cube to see its receptive field</li>
-          </ul>
-        </div>
-        
-        {receptiveFieldState.selectedNode && receptiveFieldState.selectedLayer !== null && (
-          <div style={{ 
-            marginTop: '10px', 
-            padding: '8px', 
-            backgroundColor: 'rgba(255,215,0,0.2)', 
-            borderRadius: '5px',
-            fontSize: '12px'
-          }}>
-            <strong>Selected:</strong> Layer {receptiveFieldState.selectedLayer} 
-            ({receptiveFieldState.selectedNode.x}, {receptiveFieldState.selectedNode.y})
-            <br />
-            <strong>Receptive field:</strong> {receptiveFieldState.highlightedNodesByLayer.flat().length} nodes
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-// Component for drawing connection lines between layers
-const ConnectionLines: React.FC<{
-  from: Vector3;
-  to: Vector3;
-  fromSize: { x: number; y: number };
-  toSize: { x: number; y: number };
-}> = ({ from, to, fromSize, toSize }) => {
-  const lines = useMemo(() => {
-    const connections = [];
-    const step = 3; // Only draw some connections to avoid clutter
-    
-    for (let i = 0; i < fromSize.x; i += step) {
-      for (let j = 0; j < fromSize.y; j += step) {
-        const fromX = from.x + i - fromSize.x / 2 + 0.5;
-        const fromY = from.y + j - fromSize.y / 2 + 0.5;
-        const fromZ = from.z;
-        
-        // Connect to corresponding region in the next layer
-        const toX = to.x + (i * toSize.x / fromSize.x) - toSize.x / 2 + 0.5;
-        const toY = to.y + (j * toSize.y / fromSize.y) - toSize.y / 2 + 0.5;
-        const toZ = to.z;
-        
-        connections.push([
-          [fromX, fromY, fromZ],
-          [toX, toY, toZ]
-        ]);
+        // Add all receptive field nodes to the next layer's highlights
+        nextNodes.push(...receptiveFieldNodes);
       }
+      
+      // Remove duplicates and store
+      const uniqueNodes = removeDuplicateNodes(nextNodes);
+      highlightedByLayer[currentLayer - 1] = uniqueNodes;
+      
+      // Move to the previous layer
+      currentNodes = uniqueNodes;
+      currentLayer--;
     }
     
-    return connections;
-  }, [from, to, fromSize, toSize]);
+    return highlightedByLayer;
+  }, [layerConfigs]);
+
+  const highlightedNodesByLayer = useMemo(() => {
+    return calculateReceptiveField(receptiveFieldState);
+  }, [layerConfigs, receptiveFieldState]);
+
+  // Handle layer configuration updates
+  const handleConfigurationChange = useCallback((index: number, configTemplate: LayerConfigTemplate) => {
+    const newConfigs = [...layerConfigs];
+    // Convert the template back to our full config format
+    newConfigs[index] = { ...configTemplate, size: { x: 1, y: 1 } }; // Temporary size, will be recalculated
+    setLayerConfigs(calculateLayerSizes(newConfigs));
+
+    // If there's a selected node, try to preserve it or find the closest one
+    if (receptiveFieldState.selectedNode && receptiveFieldState.selectedLayer !== null) {
+      const selectedLayerConfig = newConfigs[receptiveFieldState.selectedLayer];
+      
+      if (selectedLayerConfig) {
+        const { x, y } = receptiveFieldState.selectedNode;
+        
+        // Check if the selected position still exists
+        if (x >= selectedLayerConfig.size.x || y >= selectedLayerConfig.size.y) {
+          // Find the closest valid position
+          const newX = Math.min(x, selectedLayerConfig.size.x - 1);
+          const newY = Math.min(y, selectedLayerConfig.size.y - 1);
+          setReceptiveFieldState({
+              selectedNode: { x: newX, y: newY },
+              selectedLayer: receptiveFieldState.selectedLayer,
+          });
+        }
+
+      }
+    }
+  }, [layerConfigs, receptiveFieldState.selectedNode, receptiveFieldState.selectedLayer]);
+
+  // Handle node click
+  const handleNodeClick = useCallback((layerIndex: number, x: number, y: number) => {
+    setReceptiveFieldState({
+      selectedNode: { x, y },
+      selectedLayer: layerIndex,
+    });
+  }, [calculateReceptiveField]);
+
+  // Generate layer data for rendering
+  const layerData = useMemo(() => {
+    return layerConfigs.map(config => generateLayerData(config.size));
+  }, [layerConfigs]);
 
   return (
-    <>
-      {lines.map((points, index) => (
-        <mesh key={index}>
-          <tubeGeometry args={[
-            new CatmullRomCurve3([
-              new Vector3(points[0][0], points[0][1], points[0][2]),
-              new Vector3(points[1][0], points[1][1], points[1][2])
-            ]),
-            20,
-            0.02,
-            8,
-            false
-          ]} />
-          <meshBasicMaterial 
-            color="#ffffff" 
-            opacity={0.3} 
-            transparent 
-            depthWrite={false}
-            alphaTest={0.05}
+    <div style={{ display: 'flex', height: '100vh', width: '100vw' }}>
+      {/* Configuration Panel */}
+      <ConfigurationPanel
+        layerConfigs={layerConfigs}
+        onConfigChange={handleConfigurationChange}
+      />
+      
+      {/* 3D Canvas */}
+      <div style={{ flex: 1 }}>
+        <Canvas
+          camera={{
+            position: [15, 10, 15],
+            fov: 60
+          }}
+          style={{ background: 'linear-gradient(to bottom, #2c3e50, #34495e)' }}
+          gl={{
+            antialias: true,
+            alpha: true,
+            powerPreference: "high-performance"
+          }}
+        >
+          <ambientLight intensity={0.4} />
+          <directionalLight
+            position={[10, 10, 10]}
+            intensity={0.8}
+            castShadow
           />
-        </mesh>
-      ))}
-    </>
+          <pointLight position={[-10, -10, -10]} intensity={0.3} />
+
+          {layerConfigs.map((config, index) => (
+            <LayerGrid
+              key={`${config.name}-${config.size.x}x${config.size.y}`} // Include size in key for re-rendering
+              data={layerData[index]}
+              position={new Vector3(0, 0, 6 * (1 - index))}
+              color={config.color}
+              size={config.size}
+              name={config.name}
+              layerIndex={index}
+              onNodeClick={handleNodeClick}
+              highlightedNodes={highlightedNodesByLayer[index] || []}
+              selectedNode={receptiveFieldState.selectedLayer === index ? receptiveFieldState.selectedNode : null}
+            />
+          ))}
+
+          {/* Connection lines between layers */}
+          <ConnectionLines layerConfigs={layerConfigs} />
+
+          <OrbitControls
+            enableDamping 
+            dampingFactor={0.05}
+            enablePan={true}
+            enableZoom={true}
+            enableRotate={true}
+            target={[0, 0, 0]}
+          />
+        </Canvas>
+
+        {/* Layer information overlay */}
+        <div style={{
+          position: 'absolute',
+          top: '20px',
+          right: '20px',
+          background: 'rgba(0, 0, 0, 0.7)',
+          color: 'white',
+          padding: '15px',
+          borderRadius: '8px',
+          fontFamily: 'monospace',
+          fontSize: '14px',
+          maxWidth: '300px'
+        }}>
+          <h3 style={{ margin: '0 0 10px 0', fontSize: '16px' }}>Layer Information</h3>
+          {layerConfigs.map((config, index) => (
+            <div key={index} style={{ marginBottom: '8px' }}>
+              <div style={{ color: config.color, fontWeight: 'bold' }}>
+                {config.name}
+              </div>
+              {config.convolution && (
+                <div style={{ fontSize: '12px', marginLeft: '10px', color: '#ccc' }}>
+                  Kernel: {config.convolution.kernelSize.x}×{config.convolution.kernelSize.y} |
+                  Stride: {config.convolution.stride.x}×{config.convolution.stride.y} |
+                  Dilation: {config.convolution.dilation.x}×{config.convolution.dilation.y} |
+                  Padding: {config.convolution.padding.x}×{config.convolution.padding.y}
+                </div>
+              )}
+            </div>
+          ))}
+
+          {receptiveFieldState.selectedNode && receptiveFieldState.selectedLayer !== null && (
+            <div style={{ marginTop: '15px', paddingTop: '10px', borderTop: '1px solid #555' }}>
+              <div style={{ color: '#4CAF50', fontWeight: 'bold' }}>
+                Selected: Layer {receptiveFieldState.selectedLayer}
+                ({receptiveFieldState.selectedNode.x}, {receptiveFieldState.selectedNode.y})
+              </div>
+              <div style={{ fontSize: '12px', color: '#ccc' }}>
+                Click a cube to see its receptive field
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 };
 
