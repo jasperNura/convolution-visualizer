@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import { Vector3 } from 'three';
@@ -209,6 +209,10 @@ const ConvolutionVisualizer: React.FC = () => {
   const [temporalConvolutionMode, setTemporalConvolutionMode] = useState(true);
   const [reverseOrder, setReverseOrder] = useState(true);
 
+  // State for animation
+  const [isAnimating, setIsAnimating] = useState(false);
+  const animationIntervalRef = useRef<number | null>(null);
+
   // Calculate receptive field for a given node
   const calculateReceptiveField = useCallback((state: ReceptiveFieldState): NodeCounter[] => {
     const highlightedByLayer: NodeCounter[] = layerConfigs.map(() => new NodeCounter()); // Create empty maps for each layer
@@ -268,6 +272,70 @@ const ConvolutionVisualizer: React.FC = () => {
   const highlightedNodesByLayer = useMemo(() => {
     return calculateReceptiveField(receptiveFieldState);
   }, [layerConfigs, receptiveFieldState]);
+
+  // Animation functions
+  const getNextNode = useCallback((currentNode: Node | null, layerSize: { x: number; y: number }): Node => {
+    if (!currentNode) {
+      return { x: 0, y: 0 };
+    }
+    
+    let { x, y } = currentNode;
+    x++;
+    
+    if (x >= layerSize.x) {
+      x = 0;
+      y++;
+      
+      if (y >= layerSize.y) {
+        y = 0; // Loop back to start
+      }
+    }
+    
+    return { x, y };
+  }, []);
+
+  const startAnimation = useCallback(() => {
+    if (isAnimating) return;
+    
+    const finalLayer = layerConfigs.length - 1;
+    const finalLayerSize = layerConfigs[finalLayer].size;
+    
+    setIsAnimating(true);
+    setReceptiveFieldState({
+      selectedNode: { x: 0, y: 0 },
+      selectedLayer: finalLayer,
+    });
+    
+    animationIntervalRef.current = window.setInterval(() => {
+      setReceptiveFieldState(prevState => {
+        if (!prevState.selectedNode) return prevState;
+        
+        const nextNode = getNextNode(prevState.selectedNode, finalLayerSize);
+        return {
+          selectedNode: nextNode,
+          selectedLayer: finalLayer,
+        };
+      });
+    }, 500);
+  }, [isAnimating, layerConfigs, getNextNode]);
+
+  const stopAnimation = useCallback(() => {
+    if (animationIntervalRef.current) {
+      clearInterval(animationIntervalRef.current);
+      animationIntervalRef.current = null;
+    }
+    setIsAnimating(false);
+  }, []);
+
+  // Cleanup animation on unmount
+  useEffect(() => {
+    
+    return () => {
+      if (animationIntervalRef.current) {
+        clearInterval(animationIntervalRef.current);
+      }
+    };
+  }, []);
 
   // Handle layer configuration updates
   const handleConfigurationChange = useCallback((index: number, configTemplate: LayerConfigTemplate) => {
@@ -337,6 +405,9 @@ const ConvolutionVisualizer: React.FC = () => {
         onTemporalConvolutionModeChange={setTemporalConvolutionMode}
         reverseOrder={reverseOrder}
         onReverseOrderChange={setReverseOrder}
+        isAnimating={isAnimating}
+        onStartAnimation={startAnimation}
+        onStopAnimation={stopAnimation}
       />
       
       {/* 3D Canvas */}

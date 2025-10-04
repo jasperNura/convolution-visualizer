@@ -29,6 +29,7 @@ const getHue = (hexColor: string): number => {
     '#4CAF50': 120, // Green
     '#2196F3': 210, // Blue  
     '#9C27B0': 290, // Purple
+    '#FF5722': 14, //  Orange
   };
   return colorMap[hexColor] || 200; // Default to blue-ish
 };

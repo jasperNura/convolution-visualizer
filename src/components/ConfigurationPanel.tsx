@@ -60,6 +60,9 @@ interface ConfigurationPanelProps {
   onTemporalConvolutionModeChange: (temporalMode: boolean) => void;
   reverseOrder: boolean;
   onReverseOrderChange: (reverseOrder: boolean) => void;
+  isAnimating: boolean;
+  onStartAnimation: () => void;
+  onStopAnimation: () => void;
 }
 
 const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({
@@ -70,7 +73,10 @@ const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({
   temporalConvolutionMode,
   onTemporalConvolutionModeChange,
   reverseOrder,
-  onReverseOrderChange
+  onReverseOrderChange,
+  isAnimating,
+  onStartAnimation,
+  onStopAnimation
 }) => {
   const handleConvolutionChange = (
     layerIndex: number,
@@ -195,6 +201,43 @@ const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({
             />
             <span>Reverse Order</span>
           </label>
+
+          <div style={{ 
+            display: 'flex', 
+            flexDirection: 'column',
+            gap: '8px',
+            marginTop: '8px',
+            paddingTop: '8px',
+            borderTop: '1px solid rgba(255, 255, 255, 0.1)'
+          }}>
+            <span style={{ fontSize: '11px', color: '#ccc', fontWeight: 'bold' }}>
+              🎬 Animation Controls
+            </span>
+            <button
+              onClick={isAnimating ? onStopAnimation : onStartAnimation}
+              style={{
+                padding: '8px 12px',
+                backgroundColor: isAnimating ? '#f44336' : '#4CAF50',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                fontSize: '11px',
+                cursor: 'pointer',
+                transition: 'background-color 0.2s'
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.backgroundColor = isAnimating ? '#d32f2f' : '#45a049';
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.backgroundColor = isAnimating ? '#f44336' : '#4CAF50';
+              }}
+            >
+              {isAnimating ? '⏹️ Stop Animation' : '▶️ Start Animation'}
+            </button>
+            <div style={{ fontSize: '10px', color: '#999', lineHeight: '1.2' }}>
+              Cycles through all nodes in the final layer every 500ms
+            </div>
+          </div>
         </div>
         
         <div style={{ 
