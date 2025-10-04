@@ -4,7 +4,7 @@ import { OrbitControls } from '@react-three/drei';
 import { Vector3 } from 'three';
 import LayerGrid from './LayerGrid';
 import ConfigurationPanel from './ConfigurationPanel';
-import type { LayerConfigTemplate, LayerConfig, Node } from './components.types';
+import type { LayerConfigTemplate, LayerConfig, Node, Size } from './components.types';
 import { NodeCounter } from './components.types';
 
 interface ReceptiveFieldState {
@@ -18,7 +18,7 @@ const calculateOutputSize = (inputSize: number, kernelSize: number, stride: numb
 };
 
 // Function to calculate layer sizes based on convolution parameters
-const calculateLayerSizes = (configs: LayerConfigTemplate[], temporalMode: boolean = false): LayerConfig[] => {
+const calculateLayerSizes = (configs: LayerConfigTemplate[], inputSize: Size, temporalMode: boolean): LayerConfig[] => {
   const result: LayerConfig[] = [];
   
   for (let i = 0; i < configs.length; i++) {
@@ -27,7 +27,7 @@ const calculateLayerSizes = (configs: LayerConfigTemplate[], temporalMode: boole
     
     if (i === 0) {
       // Input layer - manually specified
-      size = { x: 10, y: 10 };
+      size = inputSize;
     } else {
       // Calculate based on previous layer and convolution parameters
       const prevSize = result[i - 1].size;
@@ -79,10 +79,10 @@ const INITIAL_LAYER_CONFIG_TEMPLATES: LayerConfigTemplate[] = [
     name: 'Conv3',
     color: '#FF5722',
     convolution: {
-      kernelSize: { x: 3, y: 2 },
+      kernelSize: { x: 3, y: 3 },
       stride: { x: 1, y: 1 },
       dilation: { x: 2, y: 1 },
-      padding: { x: 2, y: 0 }
+      padding: { x: 1, y: 0 }
     }
   }
 ];
@@ -200,19 +200,21 @@ const ConnectionLines: React.FC<{
 };
 
 const ConvolutionVisualizer: React.FC = () => {
+  // State for visualization settings
+  const [useLayerData, setUseLayerData] = useState(true);
+  const [temporalConvolutionMode, setTemporalConvolutionMode] = useState(true);
+  const [reverseOrder, setReverseOrder] = useState(true);
+
+  const [inputLayerSize, setInputLayerSize] = useState<Size>({ x: 10, y: 10 });
+
   // State for layer configuration
-  const [layerConfigs, setLayerConfigs] = useState(calculateLayerSizes(INITIAL_LAYER_CONFIG_TEMPLATES));
+  const [layerConfigs, setLayerConfigs] = useState(calculateLayerSizes(INITIAL_LAYER_CONFIG_TEMPLATES, inputLayerSize, temporalConvolutionMode));
 
   // State for receptive field highlighting
   const [receptiveFieldState, setReceptiveFieldState] = useState<ReceptiveFieldState>({
     selectedNode: null,
     selectedLayer: null,
   });
-
-  // State for visualization settings
-  const [useLayerData, setUseLayerData] = useState(true);
-  const [temporalConvolutionMode, setTemporalConvolutionMode] = useState(true);
-  const [reverseOrder, setReverseOrder] = useState(true);
 
   // State for animation
   const [isAnimating, setIsAnimating] = useState(false);
@@ -343,11 +345,17 @@ const ConvolutionVisualizer: React.FC = () => {
   }, []);
 
   // Handle layer configuration updates
+  const handleInputLayerSizeChange = useCallback((newSize: Size) => {
+    setInputLayerSize(newSize);
+    setLayerConfigs(calculateLayerSizes(layerConfigs, newSize, temporalConvolutionMode));
+  }, [layerConfigs, inputLayerSize, temporalConvolutionMode]);
+
+  // Handle layer configuration updates
   const handleConfigurationChange = useCallback((index: number, configTemplate: LayerConfigTemplate) => {
     const newConfigs = [...layerConfigs];
     // Convert the template back to our full config format
     newConfigs[index] = { ...configTemplate, size: { x: 1, y: 1 } }; // Temporary size, will be recalculated
-    setLayerConfigs(calculateLayerSizes(newConfigs));
+    setLayerConfigs(calculateLayerSizes(newConfigs, inputLayerSize, temporalConvolutionMode));
 
     // If there's a selected node, try to preserve it or find the closest one
     if (receptiveFieldState.selectedNode && receptiveFieldState.selectedLayer !== null) {
@@ -369,7 +377,81 @@ const ConvolutionVisualizer: React.FC = () => {
 
       }
     }
-  }, [layerConfigs, receptiveFieldState.selectedNode, receptiveFieldState.selectedLayer]);
+  }, [layerConfigs, inputLayerSize, temporalConvolutionMode, receptiveFieldState.selectedNode, receptiveFieldState.selectedLayer]);
+
+  // Generate default color for new layers
+  const generateLayerColor = useCallback((index: number): string => {
+    const colors = [
+      '#4CAF50', // Green (Input)
+      '#2196F3', // Blue
+      '#9C27B0', // Purple
+      '#FF5722', // Deep Orange
+      '#FF9800', // Orange
+      '#795548', // Brown
+      '#607D8B', // Blue Grey
+      '#E91E63', // Pink
+      '#3F51B5', // Indigo
+      '#009688', // Teal
+      '#8BC34A', // Light Green
+      '#FFEB3B'  // Yellow
+    ];
+    return colors[index % colors.length];
+  }, []);
+
+  // Add new convolution layer
+  const handleAddLayer = useCallback(() => {
+    const newIndex = layerConfigs.length;
+    const newLayer: LayerConfigTemplate = {
+      name: `Conv${newIndex}`,
+      color: generateLayerColor(newIndex),
+      convolution: {
+        kernelSize: { x: 3, y: 3 },
+        stride: { x: 1, y: 1 },
+        dilation: { x: 1, y: 1 },
+        padding: { x: 0, y: 0 }
+      }
+    };
+    
+    // Convert current layerConfigs to templates, add new layer, then recalculate
+    const currentTemplates = layerConfigs.map(config => ({
+      name: config.name,
+      color: config.color,
+      convolution: config.convolution
+    }));
+    
+    const newTemplates = [...currentTemplates, newLayer];
+    const newConfigs = calculateLayerSizes(newTemplates, inputLayerSize, temporalConvolutionMode);
+    setLayerConfigs(newConfigs);
+  }, [layerConfigs, generateLayerColor, temporalConvolutionMode]);
+
+  // Remove layer by index
+  const handleRemoveLayer = useCallback((index: number) => {
+    if (index === 0) return; // Cannot remove input layer
+    
+    const currentTemplates = layerConfigs.map(config => ({
+      name: config.name,
+      color: config.color,
+      convolution: config.convolution
+    }));
+    
+    const newTemplates = currentTemplates.filter((_, i) => i !== index);
+    const newConfigs = calculateLayerSizes(newTemplates, inputLayerSize, temporalConvolutionMode);
+    setLayerConfigs(newConfigs);
+    
+    // If the removed layer was selected, clear the selection
+    if (receptiveFieldState.selectedLayer === index) {
+      setReceptiveFieldState({
+        selectedNode: null,
+        selectedLayer: null,
+      });
+    } else if (receptiveFieldState.selectedLayer && receptiveFieldState.selectedLayer > index) {
+      // Adjust selected layer index if it's after the removed layer
+      setReceptiveFieldState({
+        selectedNode: receptiveFieldState.selectedNode,
+        selectedLayer: receptiveFieldState.selectedLayer - 1,
+      });
+    }
+  }, [layerConfigs, temporalConvolutionMode, receptiveFieldState, setLayerConfigs]);
 
   // Handle node click
   const handleNodeClick = useCallback((layerIndex: number, x: number, y: number) => {
@@ -404,6 +486,10 @@ const ConvolutionVisualizer: React.FC = () => {
       <ConfigurationPanel
         layerConfigs={layerConfigs}
         onConfigChange={handleConfigurationChange}
+        onAddLayer={handleAddLayer}
+        onRemoveLayer={handleRemoveLayer}
+        inputSize={inputLayerSize}
+        onInputSizeChange={handleInputLayerSizeChange}
         useLayerData={useLayerData}
         onUseLayerDataChange={setUseLayerData}
         temporalConvolutionMode={temporalConvolutionMode}
@@ -437,7 +523,7 @@ const ConvolutionVisualizer: React.FC = () => {
           />
           <pointLight position={[-10, -10, -10]} intensity={0.3} />
 
-          {layerConfigs.map((config, index) => (
+          {layerConfigs.filter(c => c.size.x > 0 && c.size.y > 0).map((config, index) => (
             <LayerGrid
               key={`${config.name}-${config.size.x}x${config.size.y}`} // Include size in key for re-rendering
               data={layerData[index]}
@@ -455,8 +541,8 @@ const ConvolutionVisualizer: React.FC = () => {
 
           {/* Connection lines between layers */}
           <ConnectionLines 
-            layerConfigs={layerConfigs}
-            layerPositions={layerConfigs.map((config, index) => calculateLayerPosition(config, index))}
+            layerConfigs={layerConfigs.filter(c => c.size.x > 0 && c.size.y > 0)}
+            layerPositions={layerConfigs.filter(c => c.size.x > 0 && c.size.y > 0).map((config, index) => calculateLayerPosition(config, index))}
           />
 
           <OrbitControls

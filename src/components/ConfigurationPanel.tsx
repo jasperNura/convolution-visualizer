@@ -1,12 +1,13 @@
 import React from 'react';
-import type { LayerConfigTemplate, ConvolutionConfig } from './components.types';
+import type { LayerConfigTemplate, ConvolutionConfig, Size } from './components.types';
 
 interface ConvolutionParameterProps {
   label: string;
   param: keyof ConvolutionConfig;
-  values: { x: number; y: number };
+  values: Size;
   minValue: number;
   maxValue: number;
+  step?: number;
   onParamChange: (param: keyof ConvolutionConfig, axis: 'x' | 'y', value: number) => void;
 }
 
@@ -16,6 +17,7 @@ const ConvolutionParameter: React.FC<ConvolutionParameterProps> = ({
   values,
   minValue,
   maxValue,
+  step = 1,
   onParamChange
 }) => (
   <div style={{ marginBottom: '8px' }}>
@@ -31,6 +33,7 @@ const ConvolutionParameter: React.FC<ConvolutionParameterProps> = ({
             min={minValue}
             max={maxValue}
             value={values.x}
+            step={step}
             onChange={(e) => onParamChange(param, 'x', parseInt(e.target.value))}
             style={compactInputStyle}
           />
@@ -42,6 +45,7 @@ const ConvolutionParameter: React.FC<ConvolutionParameterProps> = ({
             min={minValue}
             max={maxValue}
             value={values.y}
+            step={step}
             onChange={(e) => onParamChange(param, 'y', parseInt(e.target.value))}
             style={compactInputStyle}
           />
@@ -54,6 +58,10 @@ const ConvolutionParameter: React.FC<ConvolutionParameterProps> = ({
 interface ConfigurationPanelProps {
   layerConfigs: LayerConfigTemplate[];
   onConfigChange: (index: number, config: LayerConfigTemplate) => void;
+  onAddLayer: () => void;
+  onRemoveLayer: (index: number) => void;
+  inputSize: Size;
+  onInputSizeChange: (size: Size) => void;
   useLayerData: boolean;
   onUseLayerDataChange: (useLayerData: boolean) => void;
   temporalConvolutionMode: boolean;
@@ -68,7 +76,11 @@ interface ConfigurationPanelProps {
 const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({
   layerConfigs,
   onConfigChange,
+  onAddLayer,
+  onRemoveLayer,
   useLayerData,
+  inputSize,
+  onInputSizeChange,
   onUseLayerDataChange,
   temporalConvolutionMode,
   onTemporalConvolutionModeChange,
@@ -258,6 +270,51 @@ const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({
         </div>
       </div>
 
+      {/* Layer Management Section */}
+      <div style={{
+        marginBottom: '25px',
+        padding: '15px',
+        backgroundColor: 'rgba(255, 255, 255, 0.08)',
+        borderRadius: '8px',
+        border: '1px solid rgba(255, 255, 255, 0.3)'
+      }}>
+        <h3 style={{ margin: '0 0 15px 0', fontSize: '14px', color: '#fff' }}>
+          🔧 Layer Management
+        </h3>
+        
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <button
+            onClick={onAddLayer}
+            style={{
+              padding: '8px 12px',
+              backgroundColor: '#4CAF50',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              fontSize: '11px',
+              cursor: 'pointer',
+              transition: 'background-color 0.2s'
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.backgroundColor = '#45a049';
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.backgroundColor = '#4CAF50';
+            }}
+          >
+            ➕ Add Conv Layer
+          </button>
+          
+          <span style={{ fontSize: '11px', color: '#ccc' }}>
+            {layerConfigs.length - 1} convolution layer{layerConfigs.length - 1 !== 1 ? 's' : ''}
+          </span>
+        </div>
+        
+        <div style={{ fontSize: '10px', color: '#999', marginTop: '8px', lineHeight: '1.2' }}>
+          Add or remove convolution layers. The input layer cannot be removed.
+        </div>
+      </div>
+
       {layerConfigs.map((config, index) => (
         <div key={index} style={{
           marginBottom: '25px',
@@ -269,34 +326,78 @@ const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({
           <div style={{ 
             display: 'flex', 
             alignItems: 'center', 
+            justifyContent: 'space-between',
             marginBottom: '15px'
           }}>
-            <div
-              style={{
-                width: '12px',
-                height: '12px',
-                backgroundColor: config.color,
-                borderRadius: '50%',
-                marginRight: '8px'
-              }}
-            />
-            <input
-              type="text"
-              value={config.name}
-              onChange={(e) => handleNameChange(index, e.target.value)}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: 'white',
-                fontSize: '16px',
-                fontWeight: 'bold',
-                outline: 'none',
-                width: '100%'
-              }}
-              placeholder="Layer Name"
-            />
+            <div style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+              <div
+                style={{
+                  width: '12px',
+                  height: '12px',
+                  backgroundColor: config.color,
+                  borderRadius: '50%',
+                  marginRight: '8px'
+                }}
+              />
+              <input
+                type="text"
+                value={config.name}
+                onChange={(e) => handleNameChange(index, e.target.value)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'white',
+                  fontSize: '16px',
+                  fontWeight: 'bold',
+                  outline: 'none',
+                  flex: 1
+                }}
+                placeholder="Layer Name"
+              />
+            </div>
+            
+            {/* Remove button - only show for convolution layers (not input layer) */}
+            {index > 0 && (
+              <button
+                onClick={() => onRemoveLayer(index)}
+                style={{
+                  padding: '4px 8px',
+                  backgroundColor: '#f44336',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '3px',
+                  fontSize: '10px',
+                  cursor: 'pointer',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.backgroundColor = '#d32f2f';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.backgroundColor = '#f44336';
+                }}
+                title="Remove this layer"
+              >
+                🗑️ Remove
+              </button>
+            )}
           </div>
 
+          {(index == 0) && (
+            <div style={{ fontSize: '12px' }}>
+              <ConvolutionParameter
+                label="Input Size"
+                param="kernelSize" // Dummy param, not used
+                values={inputSize}
+                minValue={1}
+                maxValue={50}
+                onParamChange={(_, axis, value) => {
+                  const newSize = { ...inputSize, [axis]: value };
+                  onInputSizeChange(newSize);
+                }}
+              />
+            </div>
+          )}
           {config.convolution && (
             <div style={{ fontSize: '12px' }}>
               <ConvolutionParameter
@@ -305,6 +406,7 @@ const ConfigurationPanel: React.FC<ConfigurationPanelProps> = ({
                 values={config.convolution.kernelSize}
                 minValue={1}
                 maxValue={10}
+                step={2}
                 onParamChange={(param, axis, value) => handleConvolutionChange(index, param, axis, value)}
               />
 

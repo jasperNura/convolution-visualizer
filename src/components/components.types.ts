@@ -1,15 +1,19 @@
-// Configuration panel types (matching ConfigurationPanel.tsx)
+export interface Size {
+    x: number;
+    y: number;
+}
+
 export interface ConvolutionConfig {
-  kernelSize: { x: number; y: number };
-  stride: { x: number; y: number };
-  dilation: { x: number; y: number };
-  padding: { x: number; y: number };
+  kernelSize: Size;
+  stride: Size;
+  dilation: Size;
+  padding: Size;
 }
 
 // Full layer configuration with position and size
 export interface LayerConfig {
   name: string;
-  size: { x: number; y: number };
+  size: Size;
   color: string;
   convolution?: ConvolutionConfig;
 }
