@@ -97,7 +97,6 @@ const calculateSingleNodeReceptiveField = (
   dilation: { x: number; y: number },
   padding: { x: number; y: number },
   _inputSize: { x: number; y: number },
-  temporalMode: boolean = false
 ): Node[] => {
   const receptiveField: Node[] = [];
 
@@ -120,20 +119,13 @@ const calculateSingleNodeReceptiveField = (
 
 // Helper function to generate layer data
 const generateLayerData = (size: { x: number; y: number }) => {
-  const data = [];
-  for (let i = 0; i < size.x; i++) {
-    for (let j = 0; j < size.y; j++) {
-      // Generate some sample activation values
-      const value = Math.random() * 0.8 + 0.2;
-      data.push({
-        x: i - size.x / 2 + 0.5,
-        y: j - size.y / 2 + 0.5,
-        value: value,
-        activated: value > 0.5
-      });
-    }
-  }
-  return data;
+  return Array.from(
+    { length: size.y },
+    () => Array.from(
+      { length: size.x },
+      () => Math.random() * 0.8 + 0.2
+    )
+  );
 };
 
 // Helper function to generate connection lines between layers
@@ -144,12 +136,12 @@ const generateConnectionLines = (fromLayer: LayerConfig, fromPos: Vector3, toLay
   for (let i = 0; i < fromLayer.size.x; i += step) {
     for (let j = 0; j < fromLayer.size.y; j += step) {
       const fromX = fromPos.x + i - fromLayer.size.x / 2 + 0.5;
-      const fromY = fromPos.y + j - fromLayer.size.y / 2 + 0.5;
+      const fromY = fromPos.y - (j - fromLayer.size.y / 2 + 0.5);
       const fromZ = fromPos.z;
 
       // Connect to corresponding region in the next layer
       const toX = toPos.x + (i * toLayer.size.x / fromLayer.size.x) - toLayer.size.x / 2 + 0.5;
-      const toY = toPos.y + (j * toLayer.size.y / fromLayer.size.y) - toLayer.size.y / 2 + 0.5;
+      const toY = toPos.y - ((j * toLayer.size.y / fromLayer.size.y) - toLayer.size.y / 2 + 0.5);
       const toZ = toPos.z;
 
       positions.push(fromX, fromY, fromZ);
