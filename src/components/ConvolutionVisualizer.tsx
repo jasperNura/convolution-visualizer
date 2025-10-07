@@ -106,12 +106,7 @@ const calculateSingleNodeReceptiveField = (
     for (let ky = 0; ky < kernelSize.y; ky++) {
       // Calculate the actual input position considering stride, dilation, and padding
       const inputX = nodeX * stride.x + kx * dilation.x - padding.x;
-
-      // For temporal mode (causal), padding is only added at the beginning (y=0)
-      // so we don't subtract padding from the Y calculation
-      const inputY = temporalMode
-        ? nodeY * stride.y + ky * dilation.y
-        : nodeY * stride.y + ky * dilation.y - padding.y;
+      const inputY = nodeY * stride.y + ky * dilation.y - padding.y;
 
       // Check bounds
       // if (inputX >= 0 && inputX < inputSize.x && inputY >= 0 && inputY < inputSize.y) {
@@ -208,14 +203,34 @@ const ConvolutionVisualizer: React.FC = () => {
 
   const [inputLayerSize, setInputLayerSize] = useState<Size>({ x: 10, y: 10 });
 
-  // State for layer configuration
-  const [layerConfigs, setLayerConfigs] = useState(calculateLayerSizes(INITIAL_LAYER_CONFIG_TEMPLATES, inputLayerSize, temporalConvolutionMode));
+  // State for layer configuration templates
+  const [layerConfigTemplates, setLayerConfigTemplates] = useState(INITIAL_LAYER_CONFIG_TEMPLATES);
+
+  // Calculate layerConfigs reactively based on dependencies
+  const layerConfigs = useMemo(() => {
+    return calculateLayerSizes(layerConfigTemplates, inputLayerSize, temporalConvolutionMode);
+  }, [layerConfigTemplates, inputLayerSize, temporalConvolutionMode]);
 
   // State for receptive field highlighting
-  const [receptiveFieldState, setReceptiveFieldState] = useState<ReceptiveFieldState>({
-    selectedNode: null,
-    selectedLayer: null,
-  });
+  const [receptiveFieldUserState, setReceptiveFieldUserState] = useState<ReceptiveFieldState>({ selectedNode: null, selectedLayer: null });
+  const receptiveFieldState = useMemo(() => {
+    const { selectedNode, selectedLayer } = receptiveFieldUserState;
+    if (selectedNode == null || selectedLayer == null) return receptiveFieldUserState;
+    if (selectedLayer < 0 || selectedLayer >= layerConfigs.length) return { selectedNode: null, selectedLayer: null };
+
+    const layer = layerConfigs[selectedLayer];
+
+    const { x, y } = selectedNode;
+    const { size } = layer;
+
+    return {
+      selectedNode: {
+        x: Math.min(x, size.x - 1),
+        y: Math.min(y, size.y - 1)
+      },
+      selectedLayer
+    };
+  }, [receptiveFieldUserState, layerConfigs]);
 
   // State for animation
   const [isAnimating, setIsAnimating] = useState(false);
@@ -252,7 +267,7 @@ const ConvolutionVisualizer: React.FC = () => {
       const conv = currentLayerConfig.convolution;
 
       // For each node in the current layer, calculate its receptive field in the previous layer
-      for (const [node, ] of currentNodes) {
+      for (const [node,] of currentNodes) {
         if (node.x < 0 || node.x >= currSize.x || node.y < 0 || node.y >= currSize.y) {
           // If the node is out of bounds, move on (this can happen with padding)
           continue;
@@ -261,8 +276,7 @@ const ConvolutionVisualizer: React.FC = () => {
         const receptiveFieldNodes = calculateSingleNodeReceptiveField(
           node.x, node.y,
           conv.kernelSize, conv.stride, conv.dilation, conv.padding,
-          prevLayer.size,
-          temporalConvolutionMode
+          prevLayer.size
         );
 
         // Add all receptive field nodes to the next layer's highlights
@@ -275,7 +289,7 @@ const ConvolutionVisualizer: React.FC = () => {
     }
 
     return highlightedByLayer;
-  }, [layerConfigs, temporalConvolutionMode]);
+  }, [layerConfigs]);
 
   const highlightedNodesByLayer = useMemo(() => {
     return calculateReceptiveField(receptiveFieldState);
@@ -309,13 +323,13 @@ const ConvolutionVisualizer: React.FC = () => {
     const finalLayerSize = layerConfigs[finalLayer].size;
 
     setIsAnimating(true);
-    setReceptiveFieldState({
+    setReceptiveFieldUserState({
       selectedNode: { x: 0, y: 0 },
       selectedLayer: finalLayer,
     });
 
     animationIntervalRef.current = window.setInterval(() => {
-      setReceptiveFieldState(prevState => {
+      setReceptiveFieldUserState(prevState => {
         if (!prevState.selectedNode) return prevState;
 
         const nextNode = getNextNode(prevState.selectedNode, finalLayerSize);
@@ -346,43 +360,17 @@ const ConvolutionVisualizer: React.FC = () => {
   }, []);
 
   // Handle layer configuration updates
-  const handleInputLayerSizeChange = useCallback((newSize: Size) => {
-    setInputLayerSize(newSize);
-    setLayerConfigs(calculateLayerSizes(layerConfigs, newSize, temporalConvolutionMode));
-  }, [layerConfigs, temporalConvolutionMode]);
-
-  // Handle layer configuration updates
   const handleConfigurationChange = useCallback((index: number, configTemplate: LayerConfigTemplate) => {
-    const newConfigs = [...layerConfigs];
-    // Convert the template back to our full config format
-    newConfigs[index] = { ...configTemplate, size: { x: 1, y: 1 } }; // Temporary size, will be recalculated
-    setLayerConfigs(calculateLayerSizes(newConfigs, inputLayerSize, temporalConvolutionMode));
-
-    // If there's a selected node, try to preserve it or find the closest one
-    if (receptiveFieldState.selectedNode && receptiveFieldState.selectedLayer !== null) {
-      const selectedLayerConfig = newConfigs[receptiveFieldState.selectedLayer];
-
-      if (selectedLayerConfig) {
-        const { x, y } = receptiveFieldState.selectedNode;
-
-        // Check if the selected position still exists
-        if (x >= selectedLayerConfig.size.x || y >= selectedLayerConfig.size.y) {
-          // Find the closest valid position
-          const newX = Math.min(x, selectedLayerConfig.size.x - 1);
-          const newY = Math.min(y, selectedLayerConfig.size.y - 1);
-          setReceptiveFieldState({
-            selectedNode: { x: newX, y: newY },
-            selectedLayer: receptiveFieldState.selectedLayer,
-          });
-        }
-
-      }
-    }
-  }, [layerConfigs, inputLayerSize, temporalConvolutionMode, receptiveFieldState.selectedNode, receptiveFieldState.selectedLayer]);
+    setLayerConfigTemplates(prev => {
+      const updated = [...prev];
+      updated[index] = configTemplate;
+      return updated;
+    });
+  }, []);
 
   // Add new convolution layer
   const handleAddLayer = useCallback(() => {
-    const newIndex = layerConfigs.length;
+    const newIndex = layerConfigTemplates.length;
     const newLayer: LayerConfigTemplate = {
       name: `Conv${newIndex}`,
       color: getColor(newIndex),
@@ -394,50 +382,32 @@ const ConvolutionVisualizer: React.FC = () => {
       }
     };
 
-    // Convert current layerConfigs to templates, add new layer, then recalculate
-    const currentTemplates = layerConfigs.map(config => ({
-      name: config.name,
-      color: config.color,
-      convolution: config.convolution
-    }));
-
-    const newTemplates = [...currentTemplates, newLayer];
-    const newConfigs = calculateLayerSizes(newTemplates, inputLayerSize, temporalConvolutionMode);
-    setLayerConfigs(newConfigs);
-  }, [layerConfigs, inputLayerSize, temporalConvolutionMode]);
+    setLayerConfigTemplates(prev => [...prev, newLayer]);
+  }, [layerConfigTemplates]);
 
   // Remove layer by index
   const handleRemoveLayer = useCallback((index: number) => {
     if (index === 0) return; // Cannot remove input layer
 
-    const currentTemplates = layerConfigs.map(config => ({
-      name: config.name,
-      color: config.color,
-      convolution: config.convolution
-    }));
-
-    const newTemplates = currentTemplates.filter((_, i) => i !== index);
-    const newConfigs = calculateLayerSizes(newTemplates, inputLayerSize, temporalConvolutionMode);
-    setLayerConfigs(newConfigs);
-
-    // If the removed layer was selected, clear the selection
-    if (receptiveFieldState.selectedLayer === index) {
-      setReceptiveFieldState({
+    setLayerConfigTemplates(prev => prev.filter((_, i) => i !== index));
+    if (receptiveFieldUserState.selectedLayer === index) {
+      // Adjust selected layer index if it's after the removed layer
+      setReceptiveFieldUserState({
         selectedNode: null,
         selectedLayer: null,
       });
-    } else if (receptiveFieldState.selectedLayer && receptiveFieldState.selectedLayer > index) {
+    } else if (receptiveFieldUserState.selectedLayer && receptiveFieldUserState.selectedLayer > index) {
       // Adjust selected layer index if it's after the removed layer
-      setReceptiveFieldState({
-        selectedNode: receptiveFieldState.selectedNode,
-        selectedLayer: receptiveFieldState.selectedLayer - 1,
+      setReceptiveFieldUserState({
+        selectedNode: receptiveFieldUserState.selectedNode,
+        selectedLayer: receptiveFieldUserState.selectedLayer - 1,
       });
     }
-  }, [layerConfigs, inputLayerSize, temporalConvolutionMode, receptiveFieldState, setLayerConfigs]);
+  }, [receptiveFieldUserState]);
 
   // Handle node click
   const handleNodeClick = useCallback((layerIndex: number, x: number, y: number) => {
-    setReceptiveFieldState({
+    setReceptiveFieldUserState({
       selectedNode: { x, y },
       selectedLayer: layerIndex,
     });
@@ -471,7 +441,7 @@ const ConvolutionVisualizer: React.FC = () => {
         onAddLayer={handleAddLayer}
         onRemoveLayer={handleRemoveLayer}
         inputSize={inputLayerSize}
-        onInputSizeChange={handleInputLayerSizeChange}
+        onInputSizeChange={setInputLayerSize}
         useLayerData={useLayerData}
         onUseLayerDataChange={setUseLayerData}
         temporalConvolutionMode={temporalConvolutionMode}
